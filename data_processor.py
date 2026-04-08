@@ -132,6 +132,9 @@ class WeatherDataProcessor:
                 encoding="utf-8"
             )
 
+        except:
+            df = pd.read_csv(file)
+        
         df = self.standardize_columns(df)
 
         df = self.clean_data(df)
