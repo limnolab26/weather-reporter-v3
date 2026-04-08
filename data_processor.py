@@ -346,6 +346,15 @@ def prepare_chart_data(
     values=집계값
     """
 
+    # freq 안정화
+    freq_map = {
+        "D": "D",
+        "ME": "M",
+        "YE": "Y"
+        }
+
+    freq = freq_map.get(freq, "D")
+
     pivot = (
         df
         .set_index("date")
