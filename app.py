@@ -18,7 +18,7 @@ import seaborn as sns
 
 # 기존 모듈
 from data_processor import WeatherDataProcessor
-from excel_generator import generate_excel_report
+from excel_generator import ExcelReportGenerator
 from pdf_generator import generate_pdf_report
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1273,23 +1273,20 @@ with tab5:
 
                 try:
 
-                    excel_bytes = generate_excel_report(
-                        st.session_state.df,
-                        st.session_state.monthly_df,
-                        st.session_state.climate_df
-                    )
-                    
                     from excel_generator import ExcelReportGenerator
 
                     excel_gen = ExcelReportGenerator()
 
-                    summary_df = excel_gen.generate_summary_table(df)
+                    summary_df = excel_gen.generate_summary_table(
+                        st.session_state.df
+                    )
 
                     excel_bytes = excel_gen.generate_excel(
-                        df=df,
-                        pivot_df=pivot_df,
+                        df=st.session_state.df,
+                        pivot_df=None,
                         summary_df=summary_df
                     )
+
                     st.download_button(
                         label="⬇️ Excel 다운로드",
                         data=excel_bytes,
@@ -1313,21 +1310,15 @@ with tab5:
 
                 try:
 
-                    pdf_bytes = generate_pdf_report(
-                        st.session_state.df,
-                        st.session_state.monthly_df,
-                        st.session_state.climate_df
-                    )
-
                     from pdf_generator import PDFReportGenerator
 
                     pdf_gen = PDFReportGenerator()
 
                     pdf_bytes = pdf_gen.generate_pdf(
-                    df=df,
-                    pivot_df=pivot_df,
-                    summary_df=summary_df
-                    )    
+                        df=st.session_state.df,
+                        pivot_df=None,
+                        summary_df=None
+                    )
 
                     st.download_button(
                         label="⬇️ PDF 다운로드",
