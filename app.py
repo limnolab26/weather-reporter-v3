@@ -1278,11 +1278,22 @@ with tab5:
                         st.session_state.monthly_df,
                         st.session_state.climate_df
                     )
+                    
+                    from excel_generator import ExcelReportGenerator
 
+                    excel_gen = ExcelReportGenerator()
+
+                    summary_df = excel_gen.generate_summary_table(df)
+
+                    excel_bytes = excel_gen.generate_excel(
+                        df=df,
+                        pivot_df=pivot_df,
+                        summary_df=summary_df
+                    )
                     st.download_button(
                         label="⬇️ Excel 다운로드",
                         data=excel_bytes,
-                        file_name="weather_report.xlsx",
+                        file_name=excel_gen.generate_filename(),
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
 
@@ -1308,10 +1319,20 @@ with tab5:
                         st.session_state.climate_df
                     )
 
+                    from pdf_generator import PDFReportGenerator
+
+                    pdf_gen = PDFReportGenerator()
+
+                    pdf_bytes = pdf_gen.generate_pdf(
+                    df=df,
+                    pivot_df=pivot_df,
+                    summary_df=summary_df
+                    )    
+
                     st.download_button(
                         label="⬇️ PDF 다운로드",
                         data=pdf_bytes,
-                        file_name="weather_report.pdf",
+                        file_name=pdf_gen.generate_filename(),
                         mime="application/pdf"
                     )
 
