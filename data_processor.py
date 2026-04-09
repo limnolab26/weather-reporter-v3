@@ -9,7 +9,6 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict
 
-
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 표준 컬럼 매핑 (기상청 ASOS → 내부 표준)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -103,6 +102,19 @@ def add_time_columns(df: pd.DataFrame) -> pd.DataFrame:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class WeatherDataProcessor:
+    def process(self, df: pd.DataFrame) -> pd.DataFrame:
+    """
+    외부 DataFrame 입력 처리 (app.py용)
+    """
+
+    df = self.standardize_columns(df)
+
+    df = self.clean_data(df)
+
+    df = add_time_columns(df)
+
+    return df
+    
     """
     기상자료 처리 클래스
     """
