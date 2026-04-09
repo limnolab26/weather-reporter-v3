@@ -21,7 +21,7 @@ COLUMN_MAPPING = {
 
     # 관측소
     "지점명": "station_name",
-    "지점": "station_name",
+    "지점": "station_code",
 
     # 기온
     "평균기온(°C)": "temp_avg",

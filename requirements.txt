@@ -2,56 +2,56 @@
 # Core Web Framework
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-streamlit==1.35.0
+streamlit>=1.40.0
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Data Processing
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-pandas
-numpy
+pandas>=2.0.0
+numpy>=1.26.0
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Interactive Charts
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-plotly==5.22.0
+plotly>=5.22.0
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Static Charts
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-matplotlib==3.8.4
-seaborn==0.13.2
+matplotlib>=3.9.0
+seaborn>=0.13.2
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Image (Python 3.14 compatible wheel)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+pillow>=11.0.0
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Excel Export
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-openpyxl==3.1.5
+openpyxl>=3.1.5
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # PDF Export
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-reportlab==4.2.2
+reportlab>=4.2.2
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Performance / Optional
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-python-dateutil==2.9.0.post0
-pytz==2024.1
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Streamlit Enhancements
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-streamlit-option-menu==0.3.13
+python-dateutil>=2.9.0
+pytz>=2024.1

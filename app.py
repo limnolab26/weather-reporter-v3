@@ -93,7 +93,11 @@ def load_multiple_files(uploaded_files):
         station_name = extract_station_name(file)
 
         if file.name.endswith(".csv"):
-            raw_df = pd.read_csv(file)
+            try:
+                raw_df = pd.read_csv(file, encoding="cp949")
+            except UnicodeDecodeError:
+                file.seek(0)
+                raw_df = pd.read_csv(file, encoding="utf-8")
 
         elif file.name.endswith(".xlsx"):
             raw_df = pd.read_excel(file)
