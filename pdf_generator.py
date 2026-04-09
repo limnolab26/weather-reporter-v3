@@ -42,8 +42,9 @@ def register_korean_font():
     """
 
     font_paths = [
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",  # Streamlit Cloud (Linux)
         "NanumGothic.ttf",
-        "malgun.ttf"
+        "malgun.ttf",
     ]
 
     for font_path in font_paths:

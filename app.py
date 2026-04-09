@@ -474,14 +474,15 @@ with tab1:
                 "일조시간":"sunshine"
             }
 
-            selected_element_name = st.selectbox(
+            selected_element_names = st.multiselect(
                 "기상요소 선택",
                 list(element_options.keys()),
+                default=[list(element_options.keys())[0]],
                 key="tab1_element"
             )
 
-            selected_element = element_options[
-                selected_element_name
+            selected_elements = [
+                element_options[n] for n in selected_element_names
             ]
 
         # ━━━━━━━━━━━━━━━━━━━
@@ -527,23 +528,19 @@ with tab1:
 
             st.warning("선택된 관측소 데이터가 없습니다.")
 
+        elif not selected_elements:
+
+            st.info("기상요소를 하나 이상 선택하세요.")
+
         else:
 
-            # ━━━━━━━━━━━━━━━━━━━
-            # 데이터 집계
-            # ━━━━━━━━━━━━━━━━━━━
+            if chart_type == "복합(기온+강수)":
 
-            if chart_type != "복합(기온+강수)":
+                # ━━━━━━━━━━━━━━━━━━━
+                # 복합 차트 (기온+강수)
+                # ━━━━━━━━━━━━━━━━━━━
 
-                chart_df = prepare_chart_data(
-                    chart_df,
-                    selected_element,
-                    freq
-                )
-
-            else:
-
-                chart_df = (
+                combo_df = (
                     chart_df
                     .groupby(
                         ["station_name","year","month"]
@@ -555,42 +552,50 @@ with tab1:
                     .reset_index()
                 )
 
-                chart_df["date"] = pd.to_datetime(
-                    chart_df["year"].astype(str)
+                combo_df["date"] = pd.to_datetime(
+                    combo_df["year"].astype(str)
                     + "-"
-                    + chart_df["month"].astype(str)
+                    + combo_df["month"].astype(str)
                     + "-01"
                 )
 
-            # ━━━━━━━━━━━━━━━━━━━
-            # 차트 생성
-            # ━━━━━━━━━━━━━━━━━━━
+                fig = create_temp_precip_combo(combo_df)
 
-            if chart_type == "복합(기온+강수)":
-
-                fig = create_temp_precip_combo(
-                    chart_df
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    config={"displayModeBar": True}
                 )
 
             else:
 
-                fig = create_plotly_chart(
-                    chart_df,
-                    selected_element,
-                    chart_type
-                )
+                # ━━━━━━━━━━━━━━━━━━━
+                # 요소별 차트 (복수 가능)
+                # ━━━━━━━━━━━━━━━━━━━
 
-            # ━━━━━━━━━━━━━━━━━━━
-            # 차트 표시
-            # ━━━━━━━━━━━━━━━━━━━
+                for element in selected_elements:
 
-            st.plotly_chart(
-                fig,
-                use_container_width=True,
-                config={
-                    "displayModeBar": True
-                }
-            )
+                    if element not in chart_df.columns:
+                        st.warning(f"'{element}' 컬럼이 데이터에 없습니다.")
+                        continue
+
+                    el_df = prepare_chart_data(
+                        chart_df,
+                        element,
+                        freq
+                    )
+
+                    fig = create_plotly_chart(
+                        el_df,
+                        element,
+                        chart_type
+                    )
+
+                    st.plotly_chart(
+                        fig,
+                        use_container_width=True,
+                        config={"displayModeBar": True}
+                    )
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # TAB2 — 동적 Pivot Table
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -790,20 +795,28 @@ import matplotlib.font_manager as fm
 
 
 def setup_korean_font():
-    """한글 폰트 자동 설정"""
+    """한글 폰트 자동 설정 (파일 경로 우선 → 이름 검색 순)"""
 
-    font_list = [
-        "NanumGothic",
-        "Malgun Gothic",
-        "AppleGothic"
+    font_file_candidates = [
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",  # Streamlit Cloud (Linux)
+        "NanumGothic.ttf",
+        "malgun.ttf",
     ]
 
-    available_fonts = [
-        f.name for f in fm.fontManager.ttflist
-    ]
+    for path in font_file_candidates:
+        try:
+            fm.fontManager.addfont(path)
+            prop = fm.FontProperties(fname=path)
+            plt.rcParams["font.family"] = prop.get_name()
+            plt.rcParams["axes.unicode_minus"] = False
+            return
+        except Exception:
+            continue
 
-    for font in font_list:
-        if font in available_fonts:
+    font_name_candidates = ["NanumGothic", "Malgun Gothic", "AppleGothic"]
+    available = [f.name for f in fm.fontManager.ttflist]
+    for font in font_name_candidates:
+        if font in available:
             plt.rcParams["font.family"] = font
             break
 
