@@ -19,7 +19,7 @@ COLUMN_MAPPING = {
     "일시": "date",
     "날짜": "date",
 
-    # 관측소
+    # 관측소 (지점=관측소번호, 지점명=관측소명)
     "지점명": "station_name",
     "지점": "station_code",
 
@@ -31,21 +31,27 @@ COLUMN_MAPPING = {
     # 강수
     "일강수량(mm)": "precipitation",
 
-    # 습도
+    # 습도 (구버전: 평균습도, 신버전: 평균 상대습도)
     "평균습도(%)": "humidity",
+    "평균 상대습도(%)": "humidity",
 
-    # 풍속
+    # 풍속 (구버전: 공백 없음, 신버전: 공백 있음)
     "평균풍속(m/s)": "wind_speed",
+    "평균 풍속(m/s)": "wind_speed",
     "최대풍속(m/s)": "wind_max",
+    "최대 풍속(m/s)": "wind_max",
 
-    # 일조
+    # 일조 (구버전: 일조시간, 신버전: 합계 일조시간)
     "일조시간(hr)": "sunshine",
+    "합계 일조시간(hr)": "sunshine",
 
-    # 일사
+    # 일사 (구버전: 일사량, 신버전: 합계 일사량)
     "일사량(MJ/m2)": "solar_rad",
+    "합계 일사량(MJ/m2)": "solar_rad",
 
-    # 적설
-    "적설(cm)": "snowfall"
+    # 적설 (구버전: 적설, 신버전: 일 최심신적설)
+    "적설(cm)": "snowfall",
+    "일 최심신적설(cm)": "snowfall",
 
 }
 

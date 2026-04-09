@@ -127,18 +127,21 @@ def load_multiple_files(uploaded_files):
 def create_monthly_data(df):
     """월자료 생성"""
 
+    all_agg = {
+        "temp_avg": "mean",
+        "temp_max": "mean",
+        "temp_min": "mean",
+        "precipitation": "sum",
+        "humidity": "mean",
+        "wind_speed": "mean",
+        "sunshine": "mean"
+    }
+    agg = {col: func for col, func in all_agg.items() if col in df.columns}
+
     monthly = (
         df
         .groupby(["station_name","year","month"])
-        .agg({
-            "temp_avg":"mean",
-            "temp_max":"mean",
-            "temp_min":"mean",
-            "precipitation":"sum",
-            "humidity":"mean",
-            "wind_speed":"mean",
-            "sunshine":"mean"
-        })
+        .agg(agg)
         .reset_index()
     )
 
@@ -161,18 +164,21 @@ def calculate_climate_normals(df, start_year, end_year):
         (df["year"] <= end_year)
     ]
 
+    all_agg = {
+        "temp_avg": "mean",
+        "temp_max": "mean",
+        "temp_min": "mean",
+        "precipitation": "mean",
+        "humidity": "mean",
+        "wind_speed": "mean",
+        "sunshine": "mean"
+    }
+    agg = {col: func for col, func in all_agg.items() if col in climate_df.columns}
+
     climate = (
         climate_df
         .groupby(["station_name","month"])
-        .agg({
-            "temp_avg":"mean",
-            "temp_max":"mean",
-            "temp_min":"mean",
-            "precipitation":"mean",
-            "humidity":"mean",
-            "wind_speed":"mean",
-            "sunshine":"mean"
-        })
+        .agg(agg)
         .reset_index()
     )
 
