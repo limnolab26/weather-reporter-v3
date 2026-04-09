@@ -102,25 +102,25 @@ def add_time_columns(df: pd.DataFrame) -> pd.DataFrame:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class WeatherDataProcessor:
-    def process(self, df: pd.DataFrame) -> pd.DataFrame:
-    """
-    외부 DataFrame 입력 처리 (app.py용)
-    """
-
-    df = self.standardize_columns(df)
-
-    df = self.clean_data(df)
-
-    df = add_time_columns(df)
-
-    return df
-    
     """
     기상자료 처리 클래스
     """
 
     def __init__(self):
         self.dataframes: List[pd.DataFrame] = []
+
+    def process(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        외부 DataFrame 입력 처리 (app.py용)
+        """
+
+        df = self.standardize_columns(df)
+
+        df = self.clean_data(df)
+
+        df = add_time_columns(df)
+
+        return df
 
     # ─────────────────────────────
     # CSV 로딩

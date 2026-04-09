@@ -19,7 +19,6 @@ import seaborn as sns
 # 기존 모듈
 from data_processor import WeatherDataProcessor
 from excel_generator import ExcelReportGenerator
-from pdf_generator import generate_pdf_report
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 기본 설정
