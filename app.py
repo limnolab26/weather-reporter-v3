@@ -134,7 +134,10 @@ def create_monthly_data(df):
         "precipitation": "sum",
         "humidity": "mean",
         "wind_speed": "mean",
-        "sunshine": "mean"
+        "wind_max": "mean",
+        "sunshine": "sum",
+        "solar_rad": "sum",
+        "snowfall": "sum",
     }
     agg = {col: func for col, func in all_agg.items() if col in df.columns}
 
@@ -171,7 +174,10 @@ def calculate_climate_normals(df, start_year, end_year):
         "precipitation": "mean",
         "humidity": "mean",
         "wind_speed": "mean",
-        "sunshine": "mean"
+        "wind_max": "mean",
+        "sunshine": "mean",
+        "solar_rad": "mean",
+        "snowfall": "mean",
     }
     agg = {col: func for col, func in all_agg.items() if col in climate_df.columns}
 
@@ -195,6 +201,11 @@ uploaded_files = st.sidebar.file_uploader(
     "CSV 또는 XLSX 파일 업로드",
     type=["csv","xlsx"],
     accept_multiple_files=True
+)
+
+st.sidebar.link_button(
+    "🌐 기상자료개방포털 ASOS 자료",
+    "https://data.kma.go.kr/data/grnd/selectAsosRltmList.do?pgmNo=36"
 )
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -268,9 +279,8 @@ else:
 # 탭 생성
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 대화형 차트",
-    "📋 동적 피벗표",
     "🐍 Python 차트",
     "📆 평년 분석",
     "⬇️ 보고서 다운로드",
@@ -330,19 +340,36 @@ def prepare_chart_data(df, element, freq):
     return grouped
 
 
+ELEMENT_LABELS = {
+    "temp_avg": "평균기온 (°C)",
+    "temp_max": "최고기온 (°C)",
+    "temp_min": "최저기온 (°C)",
+    "precipitation": "강수량 (mm)",
+    "humidity": "습도 (%)",
+    "wind_speed": "평균풍속 (m/s)",
+    "wind_max": "최대풍속 (m/s)",
+    "sunshine": "일조시간 (hr)",
+    "solar_rad": "일사량 (MJ/m²)",
+    "snowfall": "적설 (cm)",
+}
+
+ELEMENT_OPTIONS = {
+    "평균기온": "temp_avg",
+    "최고기온": "temp_max",
+    "최저기온": "temp_min",
+    "강수량": "precipitation",
+    "습도": "humidity",
+    "평균풍속": "wind_speed",
+    "최대풍속": "wind_max",
+    "일조시간": "sunshine",
+    "일사량": "solar_rad",
+    "적설": "snowfall",
+}
+
+
 def create_plotly_chart(df, element, chart_type):
 
-    element_labels = {
-        "temp_avg":"평균기온 (°C)",
-        "temp_max":"최고기온 (°C)",
-        "temp_min":"최저기온 (°C)",
-        "precipitation":"강수량 (mm)",
-        "humidity":"습도 (%)",
-        "wind_speed":"풍속 (m/s)",
-        "sunshine":"일조시간 (hr)"
-    }
-
-    y_label = element_labels.get(element, element)
+    y_label = ELEMENT_LABELS.get(element, element)
 
     if chart_type == "선":
 
@@ -352,10 +379,7 @@ def create_plotly_chart(df, element, chart_type):
             y=element,
             color="station_name",
             markers=True,
-            labels={
-                "date":"날짜",
-                element:y_label
-            }
+            labels={"date": "날짜", element: y_label}
         )
 
     elif chart_type == "막대":
@@ -365,11 +389,55 @@ def create_plotly_chart(df, element, chart_type):
             x="date",
             y=element,
             color="station_name",
-            labels={
-                "date":"날짜",
-                element:y_label
-            }
+            labels={"date": "날짜", element: y_label}
         )
+
+    fig.update_layout(height=420)
+
+    return fig
+
+
+def create_comparison_chart(df, selected_elements, element_chart_types, freq):
+    """여러 기상요소를 하나의 차트에 비교"""
+
+    fig = go.Figure()
+
+    stations = df["station_name"].unique()
+
+    for element in selected_elements:
+
+        if element not in df.columns:
+            continue
+
+        el_df = prepare_chart_data(df, element, freq)
+        label = ELEMENT_LABELS.get(element, element)
+        chart_t = element_chart_types.get(element, "선")
+
+        for stn in stations:
+
+            stn_df = el_df[el_df["station_name"] == stn]
+            trace_name = f"{stn} {label}"
+
+            if chart_t == "선":
+                fig.add_trace(go.Scatter(
+                    x=stn_df["date"],
+                    y=stn_df[element],
+                    name=trace_name,
+                    mode="lines+markers"
+                ))
+            else:
+                fig.add_trace(go.Bar(
+                    x=stn_df["date"],
+                    y=stn_df[element],
+                    name=trace_name,
+                    opacity=0.75
+                ))
+
+    fig.update_layout(
+        height=450,
+        legend_title="관측소/요소",
+        barmode="group"
+    )
 
     return fig
 
@@ -464,25 +532,15 @@ with tab1:
 
         with col2:
 
-            element_options = {
-                "평균기온":"temp_avg",
-                "최고기온":"temp_max",
-                "최저기온":"temp_min",
-                "강수량":"precipitation",
-                "습도":"humidity",
-                "풍속":"wind_speed",
-                "일조시간":"sunshine"
-            }
-
             selected_element_names = st.multiselect(
                 "기상요소 선택",
-                list(element_options.keys()),
-                default=[list(element_options.keys())[0]],
+                list(ELEMENT_OPTIONS.keys()),
+                default=[list(ELEMENT_OPTIONS.keys())[0]],
                 key="tab1_element"
             )
 
             selected_elements = [
-                element_options[n] for n in selected_element_names
+                ELEMENT_OPTIONS[n] for n in selected_element_names
             ]
 
         # ━━━━━━━━━━━━━━━━━━━
@@ -512,7 +570,7 @@ with tab1:
 
             chart_type = st.selectbox(
                 "차트 유형",
-                ["선","막대","복합(기온+강수)"]
+                ["선", "막대", "복합(기온+강수)", "비교(다중요소)"]
             )
 
         # ━━━━━━━━━━━━━━━━━━━
@@ -540,15 +598,12 @@ with tab1:
                 # 복합 차트 (기온+강수)
                 # ━━━━━━━━━━━━━━━━━━━
 
+                agg_cols = {k: v for k, v in {"temp_avg": "mean", "precipitation": "sum"}.items() if k in chart_df.columns}
+
                 combo_df = (
                     chart_df
-                    .groupby(
-                        ["station_name","year","month"]
-                    )
-                    .agg({
-                        "temp_avg":"mean",
-                        "precipitation":"sum"
-                    })
+                    .groupby(["station_name", "year", "month"])
+                    .agg(agg_cols)
                     .reset_index()
                 )
 
@@ -560,6 +615,7 @@ with tab1:
                 )
 
                 fig = create_temp_precip_combo(combo_df)
+                fig.update_layout(height=420)
 
                 st.plotly_chart(
                     fig,
@@ -567,29 +623,58 @@ with tab1:
                     config={"displayModeBar": True}
                 )
 
+            elif chart_type == "비교(다중요소)":
+
+                # ━━━━━━━━━━━━━━━━━━━
+                # 다중요소 비교 차트
+                # ━━━━━━━━━━━━━━━━━━━
+
+                if not selected_elements:
+                    st.info("기상요소를 하나 이상 선택하세요.")
+                else:
+                    with st.expander("요소별 차트 종류 설정", expanded=True):
+                        element_chart_types = {}
+                        n = len(selected_element_names)
+                        type_cols = st.columns(min(n, 5))
+                        for i, el_name in enumerate(selected_element_names):
+                            with type_cols[i % 5]:
+                                el_type = st.selectbox(
+                                    el_name,
+                                    ["선", "막대"],
+                                    key=f"eltype_{el_name}"
+                                )
+                                element_chart_types[ELEMENT_OPTIONS[el_name]] = el_type
+
+                    available = [e for e in selected_elements if e in chart_df.columns]
+                    missing = [e for e in selected_elements if e not in chart_df.columns]
+                    for m in missing:
+                        st.warning(f"'{ELEMENT_LABELS.get(m, m)}' 데이터가 없습니다.")
+
+                    if available:
+                        fig = create_comparison_chart(
+                            chart_df, available, element_chart_types, freq
+                        )
+                        st.plotly_chart(
+                            fig,
+                            use_container_width=True,
+                            config={"displayModeBar": True}
+                        )
+
             else:
 
                 # ━━━━━━━━━━━━━━━━━━━
-                # 요소별 차트 (복수 가능)
+                # 요소별 개별 차트
                 # ━━━━━━━━━━━━━━━━━━━
 
                 for element in selected_elements:
 
                     if element not in chart_df.columns:
-                        st.warning(f"'{element}' 컬럼이 데이터에 없습니다.")
+                        st.warning(f"'{ELEMENT_LABELS.get(element, element)}' 데이터가 없습니다.")
                         continue
 
-                    el_df = prepare_chart_data(
-                        chart_df,
-                        element,
-                        freq
-                    )
+                    el_df = prepare_chart_data(chart_df, element, freq)
 
-                    fig = create_plotly_chart(
-                        el_df,
-                        element,
-                        chart_type
-                    )
+                    fig = create_plotly_chart(el_df, element, chart_type)
 
                     st.plotly_chart(
                         fig,
@@ -597,198 +682,7 @@ with tab1:
                         config={"displayModeBar": True}
                     )
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB2 — 동적 Pivot Table
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def create_pivot_table(
-    df,
-    row_field,
-    col_field,
-    value_field,
-    agg_func
-):
-    """Pivot Table 생성 함수"""
-
-    pivot_df = pd.pivot_table(
-        df,
-        index=row_field,
-        columns=col_field,
-        values=value_field,
-        aggfunc=agg_func
-    )
-
-    return pivot_df
-
-
-def convert_df_to_csv(df):
-    """DataFrame → CSV bytes"""
-
-    return df.to_csv(
-        encoding="utf-8-sig"
-    ).encode("utf-8-sig")
-
-
-with tab2:
-
-    if filtered_df is None:
-
-        st.info("먼저 데이터를 업로드하세요.")
-
-    else:
-
-        st.subheader("📋 동적 Pivot Table")
-
-        # ━━━━━━━━━━━━━━━━━━━
-        # 필드 선택 UI
-        # ━━━━━━━━━━━━━━━━━━━
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-
-            row_options = [
-                "station_name",
-                "year",
-                "month",
-                "season"
-            ]
-
-            row_field = st.selectbox(
-                "행(Row)",
-                row_options
-            )
-
-        with col2:
-
-            col_options = [
-                "station_name",
-                "year",
-                "month",
-                "season"
-            ]
-
-            col_field = st.selectbox(
-                "열(Column)",
-                col_options,
-                index=1
-            )
-
-        with col3:
-
-            value_options = {
-                "평균기온":"temp_avg",
-                "최고기온":"temp_max",
-                "최저기온":"temp_min",
-                "강수량":"precipitation",
-                "습도":"humidity",
-                "풍속":"wind_speed",
-                "일조시간":"sunshine"
-            }
-
-            value_name = st.selectbox(
-                "값(Value)",
-                list(value_options.keys())
-            )
-
-            value_field = value_options[
-                value_name
-            ]
-
-        with col4:
-
-            agg_options = {
-                "평균":"mean",
-                "합계":"sum",
-                "최대":"max",
-                "최소":"min",
-                "건수":"count"
-            }
-
-            agg_name = st.selectbox(
-                "집계 함수",
-                list(agg_options.keys())
-            )
-
-            agg_func = agg_options[
-                agg_name
-            ]
-
-        # ━━━━━━━━━━━━━━━━━━━
-        # Pivot 생성 버튼
-        # ━━━━━━━━━━━━━━━━━━━
-
-        if st.button("📊 Pivot 생성"):
-
-            try:
-
-                pivot_df = create_pivot_table(
-                    filtered_df,
-                    row_field,
-                    col_field,
-                    value_field,
-                    agg_func
-                )
-
-                # 결측값 처리
-                pivot_df = pivot_df.fillna("—")
-
-                st.success("Pivot Table 생성 완료")
-
-                # ━━━━━━━━━━━━━━━━━━━
-                # Pivot 표시
-                # ━━━━━━━━━━━━━━━━━━━
-
-                st.dataframe(
-                    pivot_df,
-                    use_container_width=True
-                )
-
-                # ━━━━━━━━━━━━━━━━━━━
-                # CSV 다운로드
-                # ━━━━━━━━━━━━━━━━━━━
-
-                csv_data = convert_df_to_csv(
-                    pivot_df
-                )
-
-                st.download_button(
-                    label="⬇️ Pivot CSV 다운로드",
-                    data=csv_data,
-                    file_name="pivot_table.csv",
-                    mime="text/csv"
-                )
-
-            except Exception as e:
-
-                st.error(
-                    f"Pivot 생성 중 오류 발생: {e}"
-                )
-
-        # ━━━━━━━━━━━━━━━━━━━
-        # 빠른 예시 안내
-        # ━━━━━━━━━━━━━━━━━━━
-
-        with st.expander("💡 Pivot 사용 예시"):
-
-            st.markdown(
-                """
-                **연 × 월 평균기온**
-
-                Row: year  
-                Column: month  
-                Value: 평균기온  
-                Agg: 평균  
-
-                **관측소별 강수량 합계**
-
-                Row: station_name  
-                Column: year  
-                Value: 강수량  
-                Agg: 합계  
-                """
-            )
-            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB3 — Python 고품질 차트 (Matplotlib / Seaborn)
+# TAB2 — Python 고품질 차트 (Matplotlib / Seaborn)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import matplotlib.font_manager as fm
@@ -845,8 +739,8 @@ def create_temp_timeseries(df):
     setup_korean_font()
 
     fig, ax = plt.subplots(
-        figsize=(12,6),
-        dpi=150
+        figsize=(10,4),
+        dpi=100
     )
 
     stations = df["station_name"].unique()
@@ -896,8 +790,8 @@ def create_monthly_precip_bar(df):
     )
 
     fig, ax = plt.subplots(
-        figsize=(12,6),
-        dpi=150
+        figsize=(10,4),
+        dpi=100
     )
 
     ax.bar(
@@ -920,8 +814,8 @@ def create_temp_boxplot(df):
     setup_korean_font()
 
     fig, ax = plt.subplots(
-        figsize=(12,6),
-        dpi=150
+        figsize=(10,4),
+        dpi=100
     )
 
     sns.boxplot(
@@ -950,8 +844,8 @@ def create_heatmap(df):
     )
 
     fig, ax = plt.subplots(
-        figsize=(12,6),
-        dpi=150
+        figsize=(10,4),
+        dpi=100
     )
 
     sns.heatmap(
@@ -975,8 +869,8 @@ def create_scatter(df):
     setup_korean_font()
 
     fig, ax = plt.subplots(
-        figsize=(10,6),
-        dpi=150
+        figsize=(10,4),
+        dpi=100
     )
 
     seasons = df["season"].unique()
@@ -1008,7 +902,7 @@ def create_scatter(df):
     return fig
 
 
-with tab3:
+with tab2:
 
     if filtered_df is None:
 
@@ -1082,7 +976,7 @@ with tab3:
                     f"차트 생성 중 오류 발생: {e}"
                 )
                 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB4 — 평년 분석
+# TAB3 — 평년 분석
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def calculate_anomaly(df, climate_df, element):
@@ -1129,7 +1023,8 @@ def create_climate_chart(climate_df, element):
     )
 
     fig.update_layout(
-        title="월별 평년값"
+        title="월별 평년값",
+        height=380
     )
 
     return fig
@@ -1149,13 +1044,14 @@ def create_anomaly_chart(df, element):
     )
 
     fig.update_layout(
-        title="평년 대비 편차"
+        title="평년 대비 편차",
+        height=380
     )
 
     return fig
 
 
-with tab4:
+with tab3:
 
     if filtered_df is None:
 
@@ -1169,23 +1065,13 @@ with tab4:
         # 요소 선택
         # ━━━━━━━━━━━━━━━━━━━
 
-        element_options = {
-            "평균기온":"temp_avg",
-            "최고기온":"temp_max",
-            "최저기온":"temp_min",
-            "강수량":"precipitation",
-            "습도":"humidity",
-            "풍속":"wind_speed",
-            "일조시간":"sunshine"
-        }
-
         element_name = st.selectbox(
             "기상요소 선택",
-            list(element_options.keys()),
+            list(ELEMENT_OPTIONS.keys()),
             key="tab4_element"
         )
 
-        element = element_options[element_name]
+        element = ELEMENT_OPTIONS[element_name]
 
         # ━━━━━━━━━━━━━━━━━━━
         # 평년 데이터
@@ -1210,8 +1096,9 @@ with tab4:
         )
 
         st.dataframe(
-            climate_table,
-            use_container_width=True
+            climate_table.style.format("{:.2f}"),
+            use_container_width=True,
+            height=460
         )
 
         # 다운로드
@@ -1265,10 +1152,10 @@ with tab4:
             use_container_width=True
         )
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB5 — 보고서 다운로드
+# TAB4 — 보고서 다운로드
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-with tab5:
+with tab4:
 
     if filtered_df is None:
 
@@ -1359,10 +1246,10 @@ with tab5:
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB6 — 사용 방법
+# TAB5 — 사용 방법
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-with tab6:
+with tab5:
 
     st.subheader("ℹ️ 사용 방법")
 
@@ -1393,21 +1280,10 @@ with tab6:
 
         #### 📊 대화형 차트
 
-        - 관측소 선택
-        - 기상요소 선택
+        - 관측소 복수 선택
+        - 기상요소 복수 선택 (개별 또는 비교 차트)
         - 일/월/연 집계
-        - 복합 그래프 지원
-
-        #### 📋 Pivot Table
-
-        자유로운 통계 생성:
-
-        예:
-
-        - Row: year
-        - Column: month
-        - Value: precipitation
-        - Agg: sum
+        - 선·막대·복합(기온+강수)·비교(다중요소) 차트 지원
 
         #### 🐍 Python 차트
 
