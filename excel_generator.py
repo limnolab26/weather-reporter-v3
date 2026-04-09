@@ -148,7 +148,9 @@ class ExcelReportGenerator:
         self,
         df: pd.DataFrame,
         pivot_df: pd.DataFrame = None,
-        summary_df: pd.DataFrame = None
+        summary_df: pd.DataFrame = None,
+        monthly_df: pd.DataFrame = None,
+        climate_df: pd.DataFrame = None,
     ) -> bytes:
 
         output = io.BytesIO()
@@ -159,17 +161,26 @@ class ExcelReportGenerator:
             raw_df = self._prepare_raw_sheet(df)
             raw_df.to_excel(writer, sheet_name="원본데이터", index=False)
 
-            # 2️⃣ 월별 통계 (관측소 × 연도 × 월)
-            monthly_df = self._build_monthly_stats(df)
+            # 2️⃣ 월별 통계
             if monthly_df is not None:
-                monthly_df.to_excel(writer, sheet_name="월별통계", index=False)
+                m_out = self._prepare_monthly_sheet(monthly_df)
+                m_out.to_excel(writer, sheet_name="월별통계", index=False)
+            else:
+                m_built = self._build_monthly_stats(df)
+                if m_built is not None:
+                    m_built.to_excel(writer, sheet_name="월별통계", index=False)
 
-            # 3️⃣ 연별 통계 (관측소 × 연도)
+            # 3️⃣ 연별 통계
             annual_df = self._build_annual_stats(df)
             if annual_df is not None:
                 annual_df.to_excel(writer, sheet_name="연별통계", index=False)
 
-            # 4️⃣ 요약통계
+            # 4️⃣ 평년값 (climate_df 있으면 포함)
+            if climate_df is not None:
+                cl_out = self._prepare_climate_sheet(climate_df)
+                cl_out.to_excel(writer, sheet_name="평년값", index=False)
+
+            # 5️⃣ 요약통계
             summ_df = summary_df if summary_df is not None else self.generate_summary_table(df)
             summ_df.to_excel(writer, sheet_name="요약통계")
 
@@ -214,6 +225,24 @@ class ExcelReportGenerator:
         for col in monthly.select_dtypes(include=[np.float64, np.float32]).columns:
             monthly[col] = monthly[col].round(2)
         return monthly
+
+    def _prepare_monthly_sheet(self, monthly_df: pd.DataFrame) -> pd.DataFrame:
+        """app.py의 monthly_df를 엑셀용으로 변환"""
+        out = monthly_df.copy()
+        out = out.rename(columns={**{"station_name": "관측소명", "year": "연도", "month": "월"}, **COLUMN_KR})
+        # date 컬럼 제거 (연도·월로 충분)
+        out = out.drop(columns=["date", "year_month"], errors="ignore")
+        for col in out.select_dtypes(include=[np.float64, np.float32]).columns:
+            out[col] = out[col].round(2)
+        return out
+
+    def _prepare_climate_sheet(self, climate_df: pd.DataFrame) -> pd.DataFrame:
+        """평년값 DataFrame 엑셀용 변환"""
+        out = climate_df.copy()
+        out = out.rename(columns={**{"station_name": "관측소명", "month": "월"}, **COLUMN_KR})
+        for col in out.select_dtypes(include=[np.float64, np.float32]).columns:
+            out[col] = out[col].round(2)
+        return out
 
     def _build_annual_stats(self, df: pd.DataFrame) -> pd.DataFrame | None:
         """관측소별 연별 통계 시트"""
