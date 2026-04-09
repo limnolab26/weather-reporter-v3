@@ -476,7 +476,8 @@ with tab1:
 
             selected_element_name = st.selectbox(
                 "기상요소 선택",
-                list(element_options.keys())
+                list(element_options.keys()),
+                key="tab1_element"
             )
 
             selected_element = element_options[
@@ -1167,7 +1168,8 @@ with tab4:
 
         element_name = st.selectbox(
             "기상요소 선택",
-            list(element_options.keys())
+            list(element_options.keys()),
+            key="tab4_element"
         )
 
         element = element_options[element_name]
