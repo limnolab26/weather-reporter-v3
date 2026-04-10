@@ -9,8 +9,29 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 상수
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CROP_BASE_TEMPS = {
+    "벼 (기본온도 10°C)": 10.0,
+    "옥수수 (기본온도 10°C)": 10.0,
+    "밀·보리 (기본온도 5°C)": 5.0,
+    "감자 (기본온도 7°C)": 7.0,
+    "콩 (기본온도 10°C)": 10.0,
+    "사과·배 (기본온도 6°C)": 6.0,
+    "직접 입력": None,
+}
+
+# 한국 중위도(37°N) 월별 대기외 일사량 근사값 (MJ/m²/day)
+RA_MONTHLY = {
+    1: 15.0, 2: 19.5, 3: 25.5, 4: 32.0, 5: 37.0, 6: 38.5,
+    7: 37.0, 8: 33.0, 9: 27.5, 10: 21.0, 11: 15.5, 12: 13.0,
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ET₀ 계산 (FAO-56 Penman-Monteith)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 def calc_et0(df: pd.DataFrame) -> pd.Series:
     """
@@ -72,6 +93,31 @@ def calc_et0(df: pd.DataFrame) -> pd.Series:
     return et0.round(2)
 
 
+def calc_et0_hargreaves(df: pd.DataFrame) -> pd.Series:
+    """
+    Hargreaves-Samani ET₀ (mm/day)
+    필요: temp_avg, temp_max, temp_min
+    일사량 없이 기온만으로 ET₀ 추정
+    ET₀ = 0.0023 × (Tmean + 17.8) × (Tmax - Tmin)^0.5 × Ra × 0.408
+    Ra: 한국 중위도(37°N) 월별 대기외 일사량 근사값 (MJ/m²/day)
+    """
+    if not all(c in df.columns for c in ["temp_avg", "temp_max", "temp_min"]):
+        return pd.Series(np.nan, index=df.index)
+
+    T = df["temp_avg"]
+    Tmax = df["temp_max"]
+    Tmin = df["temp_min"]
+
+    if "month" not in df.columns:
+        Ra = pd.Series(28.0, index=df.index)  # 연평균 근사값
+    else:
+        Ra = df["month"].map(RA_MONTHLY).fillna(28.0)
+
+    TD = (Tmax - Tmin).clip(lower=0)
+    et0 = 0.0023 * (T + 17.8) * TD**0.5 * Ra * 0.408
+    return et0.clip(lower=0).round(2)
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 적산온도 (Growing Degree Days)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -81,6 +127,31 @@ def calc_gdd(df: pd.DataFrame, t_base: float = 10.0) -> pd.Series:
     if "temp_avg" not in df.columns:
         return pd.Series(np.nan, index=df.index)
     return (df["temp_avg"] - t_base).clip(lower=0).round(2)
+
+
+def _calc_frost_free(df: pd.DataFrame) -> pd.DataFrame:
+    """관측소별, 연도별 무상기간 계산"""
+    records = []
+    for (stn, yr), sdf in df.groupby(["station_name", "year"]):
+        if "temp_min" not in sdf.columns:
+            continue
+        frost_days = sdf[sdf["temp_min"] <= 0.0]["date"]
+        spring_frost = frost_days[frost_days.dt.month <= 6]
+        autumn_frost = frost_days[frost_days.dt.month >= 7]
+        last_spring = spring_frost.max() if not spring_frost.empty else None
+        first_autumn = autumn_frost.min() if not autumn_frost.empty else None
+        if last_spring is not None and first_autumn is not None:
+            ffp = (first_autumn - last_spring).days
+        else:
+            ffp = None
+        records.append({
+            "관측소": stn,
+            "연도": yr,
+            "봄 마지막 서리": last_spring.strftime("%m-%d") if last_spring else "-",
+            "가을 첫 서리": first_autumn.strftime("%m-%d") if first_autumn else "-",
+            "무상기간(일)": ffp,
+        })
+    return pd.DataFrame(records)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -219,15 +290,42 @@ def _tab_special_days(df: pd.DataFrame) -> None:
 
 
 def _tab_et0(df: pd.DataFrame) -> None:
-    st.markdown("### 💧 기준증발산량 ET₀ (FAO Penman-Monteith)")
+    st.markdown("### 💧 기준증발산량 ET₀")
 
-    required_cols = ["temp_avg"]
-    if not any(c in df.columns for c in required_cols):
+    if "temp_avg" not in df.columns:
         st.warning("기온 데이터가 필요합니다.")
         return
 
-    df = df.copy()
-    df["et0"] = calc_et0(df)
+    # humidity 또는 solar_rad 없으면 Hargreaves 자동 선택
+    has_radiation_data = "humidity" in df.columns or "solar_rad" in df.columns
+    has_hargreaves_data = all(c in df.columns for c in ["temp_avg", "temp_max", "temp_min"])
+
+    METHOD_PM = "FAO-56 Penman-Monteith"
+    METHOD_HS = "Hargreaves-Samani (기온만 필요)"
+
+    if not has_radiation_data and has_hargreaves_data:
+        st.info(
+            "습도·일사량 데이터가 없어 Hargreaves-Samani 방법을 사용합니다. "
+            "(기온만으로 ET₀ 추정)"
+        )
+        default_method = METHOD_HS
+    else:
+        default_method = METHOD_PM
+
+    col_r1, col_r2 = st.columns([2, 1])
+    with col_r1:
+        method = st.radio(
+            "계산 방법",
+            [METHOD_PM, METHOD_HS],
+            index=0 if default_method == METHOD_PM else 1,
+            horizontal=True,
+            key="agri_et0_method"
+        )
+    with col_r2:
+        compare_mode = st.checkbox(
+            "두 방법 비교", value=False, key="agri_et0_compare",
+            help="FAO-56과 Hargreaves-Samani 결과를 같은 차트에 표시합니다."
+        )
 
     col1, col2 = st.columns(2)
     with col1:
@@ -235,47 +333,110 @@ def _tab_et0(df: pd.DataFrame) -> None:
     with col2:
         stn = st.selectbox("관측소", df["station_name"].unique().tolist(), key="agri_et0_stn")
 
+    df = df.copy()
+    df["et0_pm"] = calc_et0(df)
+    df["et0_hs"] = calc_et0_hargreaves(df) if has_hargreaves_data else pd.Series(np.nan, index=df.index)
+
     sdf = df[df["station_name"] == stn].copy()
 
-    if freq == "월별":
-        grouped = sdf.groupby(["year", "month"])["et0"].sum().reset_index()
-        grouped["date"] = pd.to_datetime(
-            grouped["year"].astype(str) + "-" + grouped["month"].astype(str) + "-01"
-        )
-        fig = px.line(
-            grouped, x="date", y="et0",
-            labels={"date": "날짜", "et0": "ET₀ (mm/월)"},
-            title=f"{stn} 월별 ET₀"
-        )
-    else:
-        grouped = sdf.groupby("year")["et0"].sum().reset_index()
-        fig = px.bar(
-            grouped, x="year", y="et0",
-            labels={"year": "연도", "et0": "ET₀ (mm/년)"},
-            title=f"{stn} 연별 ET₀",
-            color_discrete_sequence=["#2980b9"]
-        )
+    # 주 방법 컬럼 결정
+    primary_col = "et0_pm" if method == METHOD_PM else "et0_hs"
+    primary_label = "ET₀ PM (mm)" if method == METHOD_PM else "ET₀ HS (mm)"
 
-    fig.update_layout(height=380)
-    st.plotly_chart(fig, use_container_width=True)
+    if compare_mode and has_hargreaves_data:
+        # 비교 모드: 두 방법 동시 표시
+        if freq == "월별":
+            grouped = sdf.groupby(["year", "month"]).agg(
+                et0_pm=("et0_pm", "sum"),
+                et0_hs=("et0_hs", "sum")
+            ).reset_index()
+            grouped["date"] = pd.to_datetime(
+                grouped["year"].astype(str) + "-" + grouped["month"].astype(str) + "-01"
+            )
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=grouped["date"], y=grouped["et0_pm"].round(1),
+                name="FAO-56 Penman-Monteith", mode="lines"
+            ))
+            fig.add_trace(go.Scatter(
+                x=grouped["date"], y=grouped["et0_hs"].round(1),
+                name="Hargreaves-Samani", mode="lines",
+                line=dict(dash="dash")
+            ))
+            fig.update_layout(
+                height=380, yaxis_title="ET₀ (mm/월)",
+                title=f"{stn} 월별 ET₀ — 방법 비교"
+            )
+        else:
+            grouped = sdf.groupby("year").agg(
+                et0_pm=("et0_pm", "sum"),
+                et0_hs=("et0_hs", "sum")
+            ).reset_index()
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=grouped["year"], y=grouped["et0_pm"].round(1),
+                name="FAO-56 Penman-Monteith", opacity=0.8
+            ))
+            fig.add_trace(go.Bar(
+                x=grouped["year"], y=grouped["et0_hs"].round(1),
+                name="Hargreaves-Samani", opacity=0.8
+            ))
+            fig.update_layout(
+                height=380, barmode="group",
+                yaxis_title="ET₀ (mm/년)",
+                title=f"{stn} 연별 ET₀ — 방법 비교"
+            )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        # 단일 방법 표시
+        if freq == "월별":
+            grouped = sdf.groupby(["year", "month"])[primary_col].sum().reset_index()
+            grouped["date"] = pd.to_datetime(
+                grouped["year"].astype(str) + "-" + grouped["month"].astype(str) + "-01"
+            )
+            fig = px.line(
+                grouped, x="date", y=primary_col,
+                labels={"date": "날짜", primary_col: "ET₀ (mm/월)"},
+                title=f"{stn} 월별 ET₀ ({method})"
+            )
+        else:
+            grouped = sdf.groupby("year")[primary_col].sum().reset_index()
+            fig = px.bar(
+                grouped, x="year", y=primary_col,
+                labels={"year": "연도", primary_col: "ET₀ (mm/년)"},
+                title=f"{stn} 연별 ET₀ ({method})",
+                color_discrete_sequence=["#2980b9"]
+            )
+        fig.update_layout(height=380)
+        st.plotly_chart(fig, use_container_width=True)
+
+    if method == METHOD_HS or compare_mode:
+        st.caption(
+            "※ Hargreaves-Samani: 한국 중위도(37°N) 월별 대기외 일사량(Ra) 근사값 사용. "
+            "일사량·습도 데이터 보유 시 FAO-56 Penman-Monteith 권장."
+        )
 
     # 실측 증발량과 비교
     if "evaporation_large" in df.columns or "evaporation_small" in df.columns:
         st.markdown("#### ET₀ vs 실측 증발량 비교 (월합계)")
         evap_col = "evaporation_large" if "evaporation_large" in df.columns else "evaporation_small"
         monthly = sdf.groupby(["year", "month"]).agg(
-            et0=("et0", "sum"),
+            et0=(primary_col, "sum"),
             evap=(evap_col, "sum")
         ).reset_index()
         monthly["date"] = pd.to_datetime(
             monthly["year"].astype(str) + "-" + monthly["month"].astype(str) + "-01"
         )
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=monthly["date"], y=monthly["et0"].round(1),
-                                  name="ET₀ (PM)", mode="lines"))
-        fig2.add_trace(go.Scatter(x=monthly["date"], y=monthly["evap"].round(1),
-                                  name=f"실측 ({evap_col})", mode="lines",
-                                  line=dict(dash="dash")))
+        fig2.add_trace(go.Scatter(
+            x=monthly["date"], y=monthly["et0"].round(1),
+            name=f"ET₀ ({method[:7]})", mode="lines"
+        ))
+        fig2.add_trace(go.Scatter(
+            x=monthly["date"], y=monthly["evap"].round(1),
+            name=f"실측 ({evap_col})", mode="lines",
+            line=dict(dash="dash")
+        ))
         fig2.update_layout(height=350, yaxis_title="증발산량 (mm/월)")
         st.plotly_chart(fig2, use_container_width=True)
 
@@ -287,31 +448,48 @@ def _tab_gdd(df: pd.DataFrame) -> None:
         st.warning("평균기온 데이터가 필요합니다.")
         return
 
+    # ── 작물 선택 UI ──
     col1, col2 = st.columns(2)
     with col1:
-        t_base = st.selectbox("기준온도 (°C)", [0, 5, 10, 15], index=2, key="agri_gdd_tbase")
+        crop_name = st.selectbox(
+            "작물 선택",
+            list(CROP_BASE_TEMPS.keys()),
+            index=0,
+            key="agri_gdd_crop"
+        )
     with col2:
         stn = st.selectbox("관측소", df["station_name"].unique().tolist(), key="agri_gdd_stn")
+
+    if CROP_BASE_TEMPS[crop_name] is None:
+        t_base = st.number_input(
+            "기준온도 직접 입력 (°C)", min_value=0.0, max_value=15.0,
+            value=10.0, step=0.5, key="agri_gdd_tbase_custom"
+        )
+        display_name = f"직접 입력 ({t_base}°C)"
+    else:
+        t_base = CROP_BASE_TEMPS[crop_name]
+        display_name = crop_name
 
     sdf = df[df["station_name"] == stn].copy()
     sdf["gdd"] = calc_gdd(sdf, float(t_base))
 
-    # 연도별 누적 적산온도 (1월 1일부터 누적)
+    # 연도별 누적 적산온도
     annual_gdd = sdf.groupby("year")["gdd"].sum().reset_index()
-    annual_gdd.columns = ["연도", f"연간 적산온도(T_base={t_base}°C)"]
+    gdd_col = f"연간 적산온도(T_base={t_base}°C)"
+    annual_gdd.columns = ["연도", gdd_col]
 
     st.dataframe(annual_gdd, use_container_width=True, height=300)
 
     fig = px.bar(
-        annual_gdd, x="연도", y=f"연간 적산온도(T_base={t_base}°C)",
+        annual_gdd, x="연도", y=gdd_col,
         labels={"연도": "연도"},
-        title=f"{stn} 연간 적산온도 (기준온도 {t_base}°C)",
+        title=f"{stn} 연간 적산온도 — {display_name} (기준온도 {t_base}°C)",
         color_discrete_sequence=["#e67e22"]
     )
     fig.update_layout(height=380)
     st.plotly_chart(fig, use_container_width=True)
 
-    # 특정 연도 일별 누적 곡선
+    # 연도별 일별 누적 곡선
     st.markdown("#### 연도별 일별 누적 적산온도")
     years = sorted(sdf["year"].unique())
     sel_years = st.multiselect(
@@ -336,9 +514,70 @@ def _tab_gdd(df: pd.DataFrame) -> None:
         fig2.update_layout(
             height=380,
             xaxis_title="일수 (Day of Year)",
-            yaxis_title=f"누적 적산온도 (°C·day)",
+            yaxis_title="누적 적산온도 (°C·day)",
         )
         st.plotly_chart(fig2, use_container_width=True)
+
+    # ── 무상기간 (Frost-Free Period) 분석 ──
+    with st.expander("🌡️ 무상기간 (Frost-Free Period) 분석", expanded=False):
+        if "temp_min" not in df.columns:
+            st.warning("최저기온(temp_min) 데이터가 필요합니다.")
+        else:
+            ffp_df = _calc_frost_free(df)
+
+            if ffp_df.empty:
+                st.warning("무상기간 계산에 충분한 데이터가 없습니다.")
+            else:
+                # 요약 통계
+                ffp_valid = ffp_df.dropna(subset=["무상기간(일)"])
+                if not ffp_valid.empty:
+                    st.markdown("##### 관측소별 무상기간 요약 통계")
+                    summary = ffp_valid.groupby("관측소")["무상기간(일)"].agg(
+                        평균="mean", 최대="max", 최소="min"
+                    ).round(1).reset_index()
+                    st.dataframe(summary, use_container_width=True)
+
+                # 연도별 막대 차트 (관측소별 색 구분)
+                st.markdown("##### 연도별 무상기간")
+                fig3 = px.bar(
+                    ffp_valid, x="연도", y="무상기간(일)", color="관측소",
+                    barmode="group",
+                    labels={"연도": "연도", "무상기간(일)": "무상기간 (일)"},
+                    title="연도별 무상기간 (마지막 봄 서리 ~ 첫 가을 서리)"
+                )
+
+                # 관측소별 추세선 추가
+                try:
+                    from scipy.stats import linregress
+                    for stn_name in ffp_valid["관측소"].unique():
+                        stn_data = ffp_valid[ffp_valid["관측소"] == stn_name].dropna(subset=["무상기간(일)"])
+                        if len(stn_data) >= 3:
+                            slope, intercept, _, _, _ = linregress(
+                                stn_data["연도"].astype(float),
+                                stn_data["무상기간(일)"].astype(float)
+                            )
+                            x_vals = stn_data["연도"].astype(float)
+                            y_trend = slope * x_vals + intercept
+                            fig3.add_trace(go.Scatter(
+                                x=stn_data["연도"], y=y_trend.round(1),
+                                mode="lines",
+                                name=f"{stn_name} 추세",
+                                line=dict(dash="dash", width=1.5),
+                                showlegend=True
+                            ))
+                except ImportError:
+                    pass  # scipy 없으면 추세선 생략
+
+                fig3.update_layout(height=400)
+                st.plotly_chart(fig3, use_container_width=True)
+
+                # 상세 데이터 테이블
+                st.markdown("##### 연도별 서리 날짜 상세")
+                st.dataframe(
+                    ffp_df.sort_values(["관측소", "연도"]),
+                    use_container_width=True,
+                    height=300
+                )
 
 
 def _tab_soil_water(df: pd.DataFrame) -> None:

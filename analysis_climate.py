@@ -5,6 +5,68 @@ import plotly.express as px
 import plotly.graph_objects as go
 from scipy import stats
 
+# ── 통계 검정 상수 ────────────────────────────────────────────────
+_MK_LARGE_N_THRESHOLD = 100  # Mann-Kendall n>100이면 sampling 경고
+_PETTITT_P_SIG = 0.05        # 유의수준
+_MK_P_SIG = 0.05
+
+
+def _mann_kendall(x: np.ndarray) -> tuple:
+    """Mann-Kendall 추세 검정 (numpy only, scipy.stats.norm 사용).
+
+    Returns:
+        (S, Z_stat, p_value, trend_direction)
+    """
+    n = len(x)
+    s = 0
+    for k in range(n - 1):
+        for j in range(k + 1, n):
+            s += np.sign(x[j] - x[k])
+    var_s = n * (n - 1) * (2 * n + 5) / 18
+    if s > 0:
+        z = (s - 1) / np.sqrt(var_s)
+    elif s < 0:
+        z = (s + 1) / np.sqrt(var_s)
+    else:
+        z = 0.0
+    p = 2 * (1 - stats.norm.cdf(abs(z)))
+    if p < _MK_P_SIG:
+        direction = "증가" if s > 0 else "감소"
+    else:
+        direction = "없음 (유의하지 않음)"
+    return float(s), float(z), float(p), direction
+
+
+def _sens_slope(x: np.ndarray, y: np.ndarray) -> float:
+    """Sen's Slope: 모든 쌍의 기울기 중앙값."""
+    slopes = []
+    n = len(y)
+    for i in range(n - 1):
+        for j in range(i + 1, n):
+            if x[j] != x[i]:
+                slopes.append((y[j] - y[i]) / (x[j] - x[i]))
+    return float(np.median(slopes)) if slopes else np.nan
+
+
+def _pettitt_test(x: np.ndarray) -> tuple:
+    """Pettitt 변화점 탐지.
+
+    Returns:
+        (change_point_index, K_stat, p_value)
+    """
+    n = len(x)
+    K = np.zeros(n)
+    for t in range(n):
+        s = 0
+        for i in range(t + 1):
+            for j in range(t + 1, n):
+                s += np.sign(x[i] - x[j])
+        K[t] = abs(s)
+    k_max = np.max(K)
+    t_star = int(np.argmax(K))
+    p = 2 * np.exp(-6 * k_max ** 2 / (n ** 3 + n ** 2))
+    return t_star, float(k_max), float(p)
+
 
 def _check_col(df: pd.DataFrame, col: str) -> bool:
     if col not in df.columns:
@@ -137,6 +199,18 @@ def _render_temp_trend(df: pd.DataFrame) -> None:
                 delta=f"R²={rec['R²']}",
             )
 
+        # 자동 해석 텍스트
+        for rec in slope_records:
+            slope_val = float(rec["기온변화(°C/10년)"])
+            r2_val = float(rec["R²"])
+            direction = "상승" if slope_val > 0 else "하강"
+            fit_desc = "비교적 강한 선형 관계" if r2_val >= 0.5 else "변동성이 있는 선형 추세"
+            st.info(
+                f"**{rec['관측소']}**: 분석 기간 중 평균기온은 선형 추세 기준 10년당 "
+                f"{slope_val:+.2f}°C {direction}하였으며 (R²={r2_val:.2f}, {fit_desc}), "
+                "이는 기후변화에 따른 전반적 온난화 경향과 비교할 수 있습니다."
+            )
+
 
 def _render_precip_trend(df: pd.DataFrame) -> None:
     if not _check_col(df, "precipitation") or not _check_col(df, "year"):
@@ -202,6 +276,17 @@ def _render_precip_trend(df: pd.DataFrame) -> None:
                 label=rec["관측소"],
                 value=rec["강수량변화(mm/10년)"] + " mm/10년",
                 delta=f"R²={rec['R²']}",
+            )
+
+        # 자동 해석 텍스트
+        for rec in slope_records:
+            slope_val = float(rec["강수량변화(mm/10년)"])
+            r2_val = float(rec["R²"])
+            direction = "증가" if slope_val > 0 else "감소"
+            variability = "변동성이 매우 큰 편" if r2_val < 0.2 else ("변동성이 있는 편" if r2_val < 0.5 else "비교적 안정적인 추세")
+            st.info(
+                f"**{rec['관측소']}**: 연강수량은 10년당 {slope_val:+.1f}mm {direction} 추세이나, "
+                f"R²={r2_val:.2f}로 {variability}입니다."
             )
 
 
@@ -298,6 +383,184 @@ def _render_period_comparison(df: pd.DataFrame) -> None:
     st.dataframe(result_df, use_container_width=True, hide_index=True)
 
 
+def _build_mk_results(df: pd.DataFrame, col: str, agg: str) -> pd.DataFrame:
+    """관측소별 Mann-Kendall / Sen's Slope / Pettitt 결과 DataFrame 반환."""
+    if "station_name" not in df.columns:
+        stations = ["전체"]
+    else:
+        stations = sorted(df["station_name"].dropna().unique().tolist())
+
+    rows = []
+    for station in stations:
+        if "station_name" in df.columns:
+            sdf = df[df["station_name"] == station]
+        else:
+            sdf = df
+
+        if agg == "mean":
+            annual = sdf.groupby("year")[col].mean().reset_index().sort_values("year")
+        else:
+            annual = sdf.groupby("year")[col].sum().reset_index().sort_values("year")
+
+        x = annual["year"].values.astype(float)
+        y = annual[col].values.astype(float)
+
+        if len(y) < 4:
+            continue
+
+        s_val, z_val, p_val, direction = _mann_kendall(y)
+        sen = _sens_slope(x, y)
+        t_star, k_max, p_pettitt = _pettitt_test(y)
+        cp_year = int(annual["year"].iloc[t_star]) if t_star < len(annual) else None
+
+        rows.append({
+            "관측소": station,
+            "추세방향": direction,
+            "Mann-Kendall Z": round(z_val, 3),
+            "p값": round(p_val, 4),
+            "유의성(p<0.05)": "O" if p_val < _MK_P_SIG else "X",
+            "Sen's Slope(단위/년)": round(sen, 4) if not np.isnan(sen) else None,
+            "Pettitt 변화점(연도)": cp_year,
+            "Pettitt p값": round(p_pettitt, 4),
+        })
+    return pd.DataFrame(rows)
+
+
+def _mk_interpretation(row: dict, unit: str) -> str:
+    """단일 관측소 결과를 자연어로 설명."""
+    station = row["관측소"]
+    z = row["Mann-Kendall Z"]
+    p = row["p값"]
+    sen = row["Sen's Slope(단위/년)"]
+    cp_year = row["Pettitt 변화점(연도)"]
+    p_pettitt = row["Pettitt p값"]
+
+    if row["유의성(p<0.05)"] == "O":
+        trend_msg = (
+            f"Mann-Kendall 검정 결과 유의한 **{row['추세방향']}** 추세 "
+            f"(Z={z:.3f}, p={p:.4f})가 확인되었으며, "
+            f"Sen's Slope는 {sen:+.4f}{unit}/년 ({sen * 10:+.3f}{unit}/10년)입니다."
+        )
+    else:
+        trend_msg = (
+            f"Mann-Kendall 검정 결과 유의한 추세가 확인되지 않았습니다 "
+            f"(Z={z:.3f}, p={p:.4f})."
+        )
+
+    if cp_year is not None and p_pettitt < _PETTITT_P_SIG:
+        cp_msg = f" Pettitt 변화점 검정 결과 **{cp_year}년**을 기점으로 유의하게 변화하였습니다 (p={p_pettitt:.4f})."
+    elif cp_year is not None:
+        cp_msg = f" Pettitt 변화점으로 {cp_year}년이 탐지되었으나 통계적으로 유의하지 않습니다 (p={p_pettitt:.4f})."
+    else:
+        cp_msg = ""
+
+    return f"**{station}** 관측소: {trend_msg}{cp_msg}"
+
+
+def _mk_chart(df: pd.DataFrame, col: str, agg: str, result_df: pd.DataFrame) -> None:
+    """시계열 + Pettitt 변화점 수직선 차트."""
+    if "station_name" not in df.columns:
+        stations = ["전체"]
+    else:
+        stations = sorted(df["station_name"].dropna().unique().tolist())
+
+    colors = px.colors.qualitative.Set1
+    fig = go.Figure()
+
+    for i, station in enumerate(stations):
+        color = colors[i % len(colors)]
+        if "station_name" in df.columns:
+            sdf = df[df["station_name"] == station]
+        else:
+            sdf = df
+
+        if agg == "mean":
+            annual = sdf.groupby("year")[col].mean().reset_index().sort_values("year")
+        else:
+            annual = sdf.groupby("year")[col].sum().reset_index().sort_values("year")
+
+        fig.add_trace(go.Scatter(
+            x=annual["year"], y=annual[col],
+            mode="lines+markers",
+            name=station,
+            line=dict(color=color, width=1.5),
+            marker=dict(size=4),
+        ))
+
+        # 변화점 수직선
+        match = result_df[result_df["관측소"] == station]
+        if not match.empty:
+            cp_year = match.iloc[0]["Pettitt 변화점(연도)"]
+            p_pettitt = match.iloc[0]["Pettitt p값"]
+            if cp_year is not None and not np.isnan(float(p_pettitt)):
+                line_color = "red" if float(p_pettitt) < _PETTITT_P_SIG else "orange"
+                fig.add_vline(
+                    x=cp_year,
+                    line_dash="dash",
+                    line_color=line_color,
+                    annotation_text=f"{station} 변화점({cp_year})",
+                    annotation_position="top right",
+                )
+
+    yaxis_label = "기온 (°C)" if col == "temp_avg" else "강수량 (mm)"
+    fig.update_layout(
+        xaxis_title="연도",
+        yaxis_title=yaxis_label,
+        height=380,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_mk_test(df: pd.DataFrame) -> None:
+    """추세 통계 검정 탭 렌더링 (Mann-Kendall / Sen's Slope / Pettitt)."""
+    st.subheader("추세 통계 검정")
+
+    if not _check_col(df, "year"):
+        return
+
+    var_option = st.radio(
+        "분석 변수",
+        options=["기온", "강수량"],
+        horizontal=True,
+        key="mk_var_option",
+    )
+
+    if var_option == "기온":
+        col, agg, unit = "temp_avg", "mean", "°C"
+        if not _check_col(df, col):
+            return
+    else:
+        col, agg, unit = "precipitation", "sum", "mm"
+        if not _check_col(df, col):
+            return
+
+    # n>100 경고
+    n_years = df["year"].nunique()
+    if n_years > _MK_LARGE_N_THRESHOLD:
+        st.warning(
+            f"연도 수({n_years}개)가 {_MK_LARGE_N_THRESHOLD}개를 초과합니다. "
+            "Mann-Kendall / Pettitt 검정은 O(n²) 연산으로 속도가 느릴 수 있습니다."
+        )
+
+    with st.spinner("통계 검정 계산 중..."):
+        result_df = _build_mk_results(df, col, agg)
+
+    if result_df.empty:
+        st.warning("검정 결과를 계산할 수 없습니다. 데이터를 확인하세요.")
+        return
+
+    st.dataframe(result_df, use_container_width=True, hide_index=True)
+
+    # 차트
+    _mk_chart(df, col, agg, result_df)
+
+    # 자동 해석
+    st.markdown("**자동 해석**")
+    for _, row in result_df.iterrows():
+        st.info(_mk_interpretation(row.to_dict(), unit))
+
+
 def _render_climate_reference(df: pd.DataFrame) -> None:
     st.info(
         "업로드된 자료 기반 분석 결과입니다. 공식 평년값은 아래 기상청 페이지를 참조하세요."
@@ -361,10 +624,11 @@ def render(df: pd.DataFrame) -> None:
     if df.empty:
         return
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "연평균 기온 추이",
         "연강수량 추이",
         "전후반기 비교",
+        "추세 통계 검정",
         "기후통계 참조",
     ])
 
@@ -378,4 +642,7 @@ def render(df: pd.DataFrame) -> None:
         _render_period_comparison(df)
 
     with tab4:
+        _render_mk_test(df)
+
+    with tab5:
         _render_climate_reference(df)

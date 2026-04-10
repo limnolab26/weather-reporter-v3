@@ -7,6 +7,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import io
+from scipy import stats
 
 
 # ── 내부 헬퍼 ──────────────────────────────────────────────────────────────
@@ -31,6 +32,198 @@ def _get_stations(df: pd.DataFrame) -> list:
     if "station_name" in df.columns:
         return sorted(df["station_name"].unique().tolist())
     return []
+
+
+# ── SPI 계산 헬퍼 ───────────────────────────────────────────────────────────
+
+def _calc_spi(monthly_precip: pd.Series, scale: int) -> pd.Series:
+    """SPI (Standardized Precipitation Index) 계산.
+
+    monthly_precip: 월별 강수량 Series
+    scale: 집계 기간 (1, 3, 6, 12개월)
+    Returns: SPI 값 Series (같은 인덱스)
+    """
+    rolled = monthly_precip.rolling(scale, min_periods=scale).sum()
+    spi = pd.Series(np.nan, index=rolled.index)
+    valid = rolled.dropna()
+    if len(valid) < 10:
+        return spi
+
+    non_zero = valid[valid > 0]
+    p_zero = (valid == 0).sum() / len(valid)
+    if len(non_zero) < 5:
+        return spi
+
+    try:
+        shape, loc, scale_param = stats.gamma.fit(non_zero, floc=0)
+        for idx in valid.index:
+            v = valid[idx]
+            if v == 0:
+                p = p_zero / 2
+            else:
+                p = p_zero + (1 - p_zero) * stats.gamma.cdf(
+                    v, shape, loc=0, scale=scale_param
+                )
+            p = np.clip(p, 0.0013, 0.9987)
+            spi[idx] = stats.norm.ppf(p)
+    except Exception:
+        pass
+
+    return spi.round(2)
+
+
+def _monthly_precip_by_station(df: pd.DataFrame) -> dict[str, pd.Series]:
+    """관측소별 월별 강수량 Series dict 반환."""
+    result = {}
+    if not _has_col(df, "year", "month", "precipitation", "station_name"):
+        return result
+    for stn, sdf in df.groupby("station_name"):
+        monthly = (
+            sdf.groupby(["year", "month"])["precipitation"]
+            .sum()
+            .reset_index()
+        )
+        monthly["date"] = pd.to_datetime(
+            monthly["year"].astype(str) + "-" + monthly["month"].astype(str).str.zfill(2)
+        )
+        monthly = monthly.sort_values("date").set_index("date")["precipitation"]
+        result[stn] = monthly
+    return result
+
+
+def _spi_drought_stats(spi_series: pd.Series, stn: str, scale: int) -> dict:
+    """SPI ≤ -1.0, ≤ -2.0 월 수와 가뭄 발생률 계산."""
+    valid = spi_series.dropna()
+    total = len(valid)
+    mild = int((valid <= -1.0).sum())
+    severe = int((valid <= -2.0).sum())
+    rate = round(mild / total * 100, 1) if total > 0 else 0.0
+    return {
+        "관측소": stn,
+        "스케일": f"SPI-{scale}",
+        "유효 월수": total,
+        "SPI≤-1.0 (월)": mild,
+        "SPI≤-2.0 (월)": severe,
+        "가뭄 발생률(%)": rate,
+    }
+
+
+def _draw_spi_chart(spi_series: pd.Series, stn: str, scale: int) -> go.Figure:
+    """SPI 시계열 Plotly 차트 생성."""
+    valid = spi_series.dropna().reset_index()
+    valid.columns = ["date", "spi"]
+
+    colors = np.where(valid["spi"] <= -1.0, "#e74c3c",
+              np.where(valid["spi"] >= 1.0, "#2980b9", "#95a5a6"))
+
+    fig = go.Figure()
+
+    # 배경 색상 밴드
+    band_defs = [
+        (2.0, 4.0,   "rgba(41,128,185,0.15)",  "심한 습윤"),
+        (1.5, 2.0,   "rgba(93,173,226,0.15)",   "보통 습윤"),
+        (-1.5, 1.5,  "rgba(200,200,200,0.08)",  "정상"),
+        (-2.0, -1.5, "rgba(230,126,34,0.15)",   "보통 가뭄"),
+        (-4.0, -2.0, "rgba(231,76,60,0.15)",    "심한 가뭄"),
+    ]
+    for y0, y1, color, label in band_defs:
+        fig.add_hrect(y0=y0, y1=y1, fillcolor=color, line_width=0, annotation_text=label,
+                      annotation_position="right", annotation_font_size=10)
+
+    fig.add_trace(go.Bar(
+        x=valid["date"], y=valid["spi"],
+        marker_color=colors.tolist(),
+        name=f"SPI-{scale}",
+    ))
+    fig.add_hline(y=0, line_color="black", line_width=1)
+
+    fig.update_layout(
+        title=f"{stn} — SPI-{scale} 시계열",
+        xaxis_title="연월",
+        yaxis_title="SPI 값",
+        height=380,
+        yaxis=dict(range=[-4, 4]),
+    )
+    return fig
+
+
+def _tab_spi(df: pd.DataFrame) -> None:
+    """SPI 가뭄지수 분석 서브탭."""
+    st.markdown("### 가뭄지수 (SPI) 분석")
+
+    if not _has_col(df, "year", "month", "precipitation", "station_name"):
+        st.warning("year, month, precipitation, station_name 컬럼이 필요합니다.")
+        return
+
+    stations = _get_stations(df)
+    selected = st.multiselect(
+        "관측소 선택",
+        options=stations,
+        default=stations[:1] if stations else [],
+        key="spi_stations",
+    )
+    if not selected:
+        st.info("관측소를 1개 이상 선택하세요.")
+        return
+
+    scale_options = {
+        "SPI-1 (1개월)": 1,
+        "SPI-3 (3개월)": 3,
+        "SPI-6 (6개월)": 6,
+        "SPI-12 (12개월)": 12,
+    }
+    chosen_labels = st.multiselect(
+        "집계 기간 선택",
+        options=list(scale_options.keys()),
+        default=["SPI-1 (1개월)", "SPI-3 (3개월)"],
+        key="spi_scales",
+    )
+    if not chosen_labels:
+        st.info("집계 기간을 1개 이상 선택하세요.")
+        return
+
+    monthly_by_stn = _monthly_precip_by_station(df)
+    stats_rows = []
+
+    for stn in selected:
+        monthly = monthly_by_stn.get(stn)
+        if monthly is None or monthly.empty:
+            st.warning(f"{stn}: 월별 강수 데이터 없음")
+            continue
+
+        # 결측월 비율 경고
+        expected_months = (monthly.index[-1].year - monthly.index[0].year) * 12 + \
+                          (monthly.index[-1].month - monthly.index[0].month) + 1
+        missing_rate = max(0, 1 - len(monthly) / expected_months) if expected_months > 0 else 0
+        if missing_rate > 0.2:
+            st.warning(f"{stn}: 결측월 비율 {missing_rate:.0%} — SPI 정확도가 낮을 수 있습니다.")
+
+        for label in chosen_labels:
+            scale = scale_options[label]
+            spi = _calc_spi(monthly, scale)
+
+            if spi.dropna().empty:
+                st.warning(f"{stn} SPI-{scale}: 유효 데이터 부족 (최소 10개월 필요)")
+                continue
+
+            fig = _draw_spi_chart(spi, stn, scale)
+            st.plotly_chart(fig, use_container_width=True)
+            stats_rows.append(_spi_drought_stats(spi, stn, scale))
+
+    # 가뭄 통계 요약 테이블
+    if stats_rows:
+        st.markdown("#### 가뭄 통계 요약")
+        stats_df = pd.DataFrame(stats_rows)
+        st.dataframe(stats_df, use_container_width=True)
+
+    # SPI 분류 기준 안내
+    with st.expander("SPI 분류 기준"):
+        st.table(pd.DataFrame({
+            "SPI 값": ["≥ 2.0", "1.5 ~ 2.0", "1.0 ~ 1.5", "-1.0 ~ 1.0",
+                       "-1.5 ~ -1.0", "-2.0 ~ -1.5", "≤ -2.0"],
+            "분류":   ["심한 습윤", "보통 습윤", "약한 습윤", "정상",
+                       "약한 가뭄", "보통 가뭄", "심한 가뭄"],
+        }))
 
 
 # ── Sub-tab 1: 연강수량 추이 ────────────────────────────────────────────────
@@ -355,7 +548,7 @@ def render(df: pd.DataFrame) -> None:
         st.warning("선택된 관측소에 데이터가 없습니다.")
         return
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "연강수량 추이",
         "강우강도 분석",
         "연속 무강수일",
@@ -364,6 +557,7 @@ def render(df: pd.DataFrame) -> None:
         "누적강수량 분석",
         "여름 강수 집중도",
         "강우일수 분석",
+        "SPI 가뭄지수",
     ])
 
     with tab1:
@@ -389,6 +583,9 @@ def render(df: pd.DataFrame) -> None:
 
     with tab8:
         _tab_rain_days(filtered)
+
+    with tab9:
+        _tab_spi(filtered)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

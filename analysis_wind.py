@@ -18,6 +18,7 @@ CHART_HEIGHT = 400
 COMPASS_16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
               "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
 SEASON_ORDER = ["봄", "여름", "가을", "겨울"]
+AIR_DENSITY = 1.225  # kg/m³ (표준 해수면 공기밀도)
 
 
 def _has_col(df: pd.DataFrame, col: str) -> bool:
@@ -40,6 +41,27 @@ def _deg_to_compass(deg: float) -> str:
     """풍향 각도(0-360)를 16방위 문자열로 변환."""
     idx = int((deg + 11.25) / 22.5) % 16
     return COMPASS_16[idx]
+
+
+# ──────────────────────────────────────────────────────────────
+# 풍력에너지 밀도 헬퍼 함수
+# ──────────────────────────────────────────────────────────────
+
+def _calc_wind_power_density(wind_speed: pd.Series) -> pd.Series:
+    """풍력에너지 밀도 (W/m²) = 0.5 × ρ × V³, wind_speed: m/s."""
+    return (0.5 * AIR_DENSITY * wind_speed ** 3).round(1)
+
+
+def _iec_wind_class(mean_wpd: float) -> str:
+    """IEC 풍력등급 판단 (연평균 풍력에너지 밀도 기준)."""
+    if mean_wpd >= 400:
+        return "I등급 (우수)"
+    elif mean_wpd >= 200:
+        return "II등급 (양호)"
+    elif mean_wpd >= 100:
+        return "III등급 (보통)"
+    else:
+        return "낮음 (개발 부적합)"
 
 
 # ──────────────────────────────────────────────────────────────
@@ -130,6 +152,113 @@ def _tab_wind_trend(df: pd.DataFrame) -> None:
         legend={"orientation": "h", "y": -0.25},
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    # ── 풍력에너지 밀도 섹션 ──────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 💨 풍력에너지 밀도 분석")
+
+    if "year" not in df.columns or "station_name" not in df.columns:
+        st.warning("year, station_name 컬럼이 필요합니다.")
+        return
+
+    # 일별 WPD 계산 후 연별 평균 (물리적으로 올바른 방법)
+    base_cols = ["year", "station_name", "wind_speed"]
+    if "month" in df.columns:
+        base_cols = ["year", "month", "station_name", "wind_speed"]
+    wpd_df = df[base_cols].dropna(subset=["wind_speed"]).copy()
+    wpd_df = wpd_df.assign(wpd=_calc_wind_power_density(wpd_df["wind_speed"]))
+
+    annual_wpd = (
+        wpd_df.groupby(["year", "station_name"], as_index=False)
+        .agg(mean_wpd=("wpd", "mean"), max_wpd=("wpd", "max"), min_wpd=("wpd", "min"))
+    )
+
+    # 1) 연도별 평균 풍력에너지 밀도 막대 차트
+    station_list_wpd = annual_wpd["station_name"].unique().tolist()
+    years_wpd = sorted(annual_wpd["year"].unique().tolist())
+
+    fig_wpd = go.Figure()
+    color_seq = px.colors.qualitative.Plotly
+    for idx, station in enumerate(station_list_wpd):
+        sdf = annual_wpd[annual_wpd["station_name"] == station]
+        year_wpd_map = dict(zip(sdf["year"], sdf["mean_wpd"]))
+        y_vals = [year_wpd_map.get(yr, None) for yr in years_wpd]
+        fig_wpd.add_trace(go.Bar(
+            x=years_wpd,
+            y=y_vals,
+            name=station,
+            marker_color=color_seq[idx % len(color_seq)],
+        ))
+
+    fig_wpd.update_layout(
+        barmode="group",
+        title="연도별 평균 풍력에너지 밀도 (W/m²)",
+        xaxis={"title": "연도"},
+        yaxis={"title": "풍력에너지 밀도 (W/m²)"},
+        height=CHART_HEIGHT,
+        legend={"orientation": "h", "y": -0.2},
+    )
+    st.plotly_chart(fig_wpd, use_container_width=True)
+
+    # 2) 월별 풍력에너지 밀도 히트맵 (선택적)
+    show_heatmap = st.checkbox("월별 풍력에너지 밀도 히트맵 표시", key="wpd_heatmap_toggle")
+    if show_heatmap and "month" in df.columns:
+        stations_wpd_heat = sorted(wpd_df["station_name"].unique().tolist())
+        selected_heat_station = st.selectbox(
+            "히트맵 관측소 선택",
+            options=stations_wpd_heat,
+            key="wpd_heatmap_station",
+        )
+        monthly_wpd = (
+            wpd_df[wpd_df["station_name"] == selected_heat_station]
+            .groupby(["month", "year"], as_index=False)
+            .agg(mean_wpd=("wpd", "mean"))
+        )
+        if not monthly_wpd.empty:
+            pivot = monthly_wpd.pivot(index="month", columns="year", values="mean_wpd")
+            pivot = pivot.reindex(index=range(1, 13))
+            month_labels = ["1월", "2월", "3월", "4월", "5월", "6월",
+                            "7월", "8월", "9월", "10월", "11월", "12월"]
+            fig_heat = go.Figure(go.Heatmap(
+                z=pivot.values.tolist(),
+                x=[str(c) for c in pivot.columns.tolist()],
+                y=[month_labels[i - 1] for i in pivot.index.tolist()],
+                colorscale="YlOrRd",
+                colorbar={"title": "W/m²"},
+            ))
+            fig_heat.update_layout(
+                title=f"{selected_heat_station} — 월별 풍력에너지 밀도 히트맵 (W/m²)",
+                xaxis={"title": "연도"},
+                yaxis={"title": "월"},
+                height=CHART_HEIGHT,
+            )
+            st.plotly_chart(fig_heat, use_container_width=True)
+
+    # 3) 풍력에너지 밀도 통계 요약 테이블
+    summary_rows = []
+    for station in station_list_wpd:
+        sdf = annual_wpd[annual_wpd["station_name"] == station]
+        overall_mean = sdf["mean_wpd"].mean()
+        overall_max = sdf["max_wpd"].max()
+        overall_min = sdf["min_wpd"].min()
+        summary_rows.append({
+            "관측소": station,
+            "연평균 풍력밀도 (W/m²)": round(overall_mean, 1),
+            "최대 (W/m²)": round(overall_max, 1),
+            "최소 (W/m²)": round(overall_min, 1),
+            "IEC 풍력등급": _iec_wind_class(overall_mean),
+        })
+
+    if summary_rows:
+        summary_df = pd.DataFrame(summary_rows)
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+
+    # 4) 참고 안내
+    st.info(
+        "풍력에너지 밀도는 지상 10m 관측값 기준입니다. "
+        "실제 발전기 허브 높이(80~120m)에서의 풍속은 멱함수 법칙"
+        "(Wind Shear Exponent α≈1/7)에 의해 약 1.3~1.5배 높습니다."
+    )
 
 
 # ──────────────────────────────────────────────────────────────
