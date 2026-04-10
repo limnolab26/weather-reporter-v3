@@ -47,15 +47,15 @@ st.markdown("""
 [data-baseweb="tab"],
 [data-testid="stTab"],
 .stTabs button[role="tab"] {
-    font-size: 22px !important;
+    font-size: 17px !important;
     font-weight: 600;
-    padding: 10px 22px !important;
+    padding: 8px 18px !important;
 }
 /* 실제 텍스트가 담긴 p 태그를 직접 타겟 */
 [data-baseweb="tab"] p,
 [data-testid="stTab"] p,
 [data-testid="stTab"] [data-testid="stMarkdownContainer"] p {
-    font-size: 22px !important;
+    font-size: 17px !important;
     font-weight: 600;
     line-height: 1.3;
 }
