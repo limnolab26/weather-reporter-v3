@@ -43,13 +43,17 @@ st.set_page_config(
 # 글씨 크기 확대 (시니어 연구자용)
 st.markdown("""
 <style>
-/* ── 탭 메뉴 글씨 ── */
-.stTabs [data-baseweb="tab"] {
-    font-size: 19px !important;
+/* ── 탭 메뉴 글씨 (Streamlit 버전별 선택자 모두 적용) ── */
+.stTabs [data-baseweb="tab"],
+.stTabs button[role="tab"],
+div[data-testid="stTabs"] button,
+button[data-baseweb="tab"] {
+    font-size: 22px !important;
     font-weight: 600;
-    padding: 8px 20px;
+    padding: 10px 22px !important;
 }
-.stTabs [data-baseweb="tab-list"] {
+.stTabs [data-baseweb="tab-list"],
+div[data-testid="stTabs"] [role="tablist"] {
     gap: 4px;
     flex-wrap: wrap;
 }
