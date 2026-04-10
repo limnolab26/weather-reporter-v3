@@ -693,9 +693,11 @@ def _plot_mv_curves(ratio: pd.DataFrame, stn: str) -> go.Figure:
         xaxis=dict(title="월", tickmode="array", tickvals=month_labels, ticktext=month_labels),
         yaxis=dict(title="누적강수량 / 연강수량", range=[-0.02, 1.05],
                    tickformat=".1%"),
-        height=460,
+        width=560,
+        height=560,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
+        margin=dict(l=60, r=20, t=80, b=60),
     )
     return fig
 
@@ -722,7 +724,7 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
     ratio = _calc_mv_ratio(df, stn)
     if not ratio.empty:
         fig_mv = _plot_mv_curves(ratio, stn)
-        st.plotly_chart(fig_mv, use_container_width=True)
+        st.plotly_chart(fig_mv, use_container_width=False)
 
         # MV 커브 비율 테이블 (expander)
         with st.expander("MV 커브 수치 데이터 (연도별 월별 누적 비율)"):
@@ -820,17 +822,32 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
 
     all_df = pd.concat(all_merged, ignore_index=True)
 
-    # 기간 선택
-    selected_period = st.selectbox(
-        "분석 기간",
-        list(periods.keys()),
-        key="summer_conc_period"
+    # 기간 복수 선택
+    period_names = list(periods.keys())
+    selected_periods = st.multiselect(
+        "분석 기간 (복수 선택 가능)",
+        options=period_names,
+        default=period_names,
+        key="summer_conc_period",
     )
-    show_df = all_df[all_df["기간"] == selected_period]
+    if not selected_periods:
+        st.warning("분석 기간을 하나 이상 선택하세요.")
+        return
 
-    # 요약 통계
-    st.markdown(f"#### 관측소별 {selected_period} 강수 집중도 요약")
-    summary = show_df.groupby("관측소").agg(
+    show_df = all_df[all_df["기간"].isin(selected_periods)]
+
+    # ── 기간별 연평균 집중도 비교표 ─────────────────────────
+    st.markdown("#### 기간별 연평균 집중도 비교")
+    compare = (
+        all_df.groupby(["관측소", "기간"])["집중도(%)"]
+        .mean().round(1).unstack("기간")
+        .reindex(columns=[p for p in period_names if p in all_df["기간"].unique()])
+    )
+    st.dataframe(compare, use_container_width=True)
+
+    # ── 관측소별 요약 (선택 기간 합산) ───────────────────────
+    st.markdown("#### 선택 기간별 관측소 요약")
+    summary = show_df.groupby(["관측소", "기간"]).agg(
         연평균강수량=("연강수량", "mean"),
         기간평균강수량=("기간강수량", "mean"),
         평균집중도=("집중도(%)", "mean"),
@@ -839,51 +856,81 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
     ).round(1)
     st.dataframe(summary, use_container_width=True)
 
-    # 세 기간 동시 비교표
-    st.markdown("#### 기간별 연평균 집중도 비교")
-    compare = all_df.groupby(["관측소", "기간"])["집중도(%)"].mean().round(1).unstack("기간")
-    st.dataframe(compare, use_container_width=True)
+    # ── 연도별 집중도 추이 (선택 기간 모두 한 차트) ───────────
+    period_label = " · ".join(selected_periods)
+    title_trend = f"연도별 강수 집중도 추이 ({period_label})"
 
-    # 연도별 집중도 추이
-    fig = px.line(
-        show_df, x="연도", y="집중도(%)",
-        color="관측소", markers=True,
-        labels={"연도": "연도", "집중도(%)": "집중도 (%)"},
-        title=f"연도별 {selected_period} 강수 집중도"
-    )
-    fig.add_hline(
-        y=show_df["집중도(%)"].mean(),
-        line_dash="dash", line_color="gray",
-        annotation_text=f"전체평균 {show_df['집중도(%)'].mean():.1f}%"
-    )
-    fig.update_layout(height=400)
+    # 기간이 1개면 단순 라인, 복수면 기간+관측소를 dash로 구분
+    if len(selected_periods) == 1:
+        fig = px.line(
+            show_df, x="연도", y="집중도(%)",
+            color="관측소", markers=True,
+            labels={"연도": "연도", "집중도(%)": "집중도 (%)"},
+            title=title_trend,
+        )
+        overall_mean = show_df["집중도(%)"].mean()
+        fig.add_hline(
+            y=overall_mean, line_dash="dash", line_color="gray",
+            annotation_text=f"전체평균 {overall_mean:.1f}%",
+        )
+    else:
+        # 복수 기간: 기간별로 dash 구분, 관측소별로 색 구분
+        dash_map = {p: d for p, d in zip(period_names, ["solid", "dash", "dot", "dashdot"])}
+        fig = go.Figure()
+        colors_list = px.colors.qualitative.Set1
+        station_list = sorted(show_df["관측소"].unique())
+        for pi, period_name in enumerate(selected_periods):
+            for si, stn_name in enumerate(station_list):
+                sub = show_df[(show_df["기간"] == period_name) & (show_df["관측소"] == stn_name)]
+                if sub.empty:
+                    continue
+                color = colors_list[si % len(colors_list)]
+                fig.add_trace(go.Scatter(
+                    x=sub["연도"], y=sub["집중도(%)"],
+                    mode="lines+markers",
+                    name=f"{stn_name} / {period_name}",
+                    line=dict(color=color, dash=dash_map.get(period_name, "solid"), width=1.8),
+                    marker=dict(size=5),
+                ))
+        fig.update_layout(
+            title=title_trend,
+            xaxis_title="연도",
+            yaxis_title="집중도 (%)",
+        )
+
+    fig.update_layout(height=420,
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     st.plotly_chart(fig, use_container_width=True)
 
-    # 연강수량 vs 기간강수량 산점도 (numpy 추세선, statsmodels 불필요)
-    fig2 = px.scatter(
-        show_df, x="연강수량", y="기간강수량",
-        color="관측소",
-        labels={"연강수량": "연강수량 (mm)", "기간강수량": f"{selected_period} 강수량 (mm)"},
-        title=f"연강수량 vs {selected_period} 강수량"
-    )
-    # 관측소별 numpy polyfit 추세선 추가
-    colors_list = px.colors.qualitative.Set2
-    for i, (stn_name, grp) in enumerate(show_df.groupby("관측소")):
-        x_arr = grp["연강수량"].values.astype(float)
-        y_arr = grp["기간강수량"].values.astype(float)
-        mask = ~(np.isnan(x_arr) | np.isnan(y_arr))
-        if mask.sum() >= 2:
-            coeffs = np.polyfit(x_arr[mask], y_arr[mask], 1)
-            x_line = np.linspace(x_arr[mask].min(), x_arr[mask].max(), 50)
-            y_line = np.polyval(coeffs, x_line)
-            fig2.add_trace(go.Scatter(
-                x=x_line, y=y_line, mode="lines",
-                name=f"{stn_name} 추세",
-                line=dict(color=colors_list[i % len(colors_list)], dash="dash", width=1.5),
-                showlegend=False,
-            ))
-    fig2.update_layout(height=380)
-    st.plotly_chart(fig2, use_container_width=True)
+    # ── 기간별 산점도 (연강수량 vs 기간강수량) ────────────────
+    st.markdown("#### 연강수량 vs 기간별 강수량")
+    n_cols = min(len(selected_periods), 3)
+    cols = st.columns(n_cols)
+    colors_sc = px.colors.qualitative.Set2
+
+    for ci, period_name in enumerate(selected_periods):
+        pdf = show_df[show_df["기간"] == period_name]
+        fig_sc = px.scatter(
+            pdf, x="연강수량", y="기간강수량",
+            color="관측소",
+            labels={"연강수량": "연강수량 (mm)", "기간강수량": f"{period_name} 강수량 (mm)"},
+            title=period_name,
+        )
+        for i, (stn_name, grp) in enumerate(pdf.groupby("관측소")):
+            x_arr = grp["연강수량"].values.astype(float)
+            y_arr = grp["기간강수량"].values.astype(float)
+            mask = ~(np.isnan(x_arr) | np.isnan(y_arr))
+            if mask.sum() >= 2:
+                coeffs = np.polyfit(x_arr[mask], y_arr[mask], 1)
+                x_line = np.linspace(x_arr[mask].min(), x_arr[mask].max(), 50)
+                fig_sc.add_trace(go.Scatter(
+                    x=x_line, y=np.polyval(coeffs, x_line), mode="lines",
+                    line=dict(color=colors_sc[i % len(colors_sc)], dash="dash", width=1.5),
+                    showlegend=False,
+                ))
+        fig_sc.update_layout(height=340, showlegend=(len(selected_periods) == 1))
+        with cols[ci % n_cols]:
+            st.plotly_chart(fig_sc, use_container_width=True)
 
     csv = show_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", csv, "여름강수집중도.csv", "text/csv", key="summer_conc_csv")
