@@ -264,16 +264,6 @@ st.sidebar.header("📆 평년기간 설정")
 climate_start = st.sidebar.number_input("평년 시작연도", min_value=1950, max_value=2100, value=1991)
 climate_end = st.sidebar.number_input("평년 종료연도", min_value=1950, max_value=2100, value=2020)
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("**🔗 관련 사이트**")
-st.sidebar.link_button("🌤️ 기상청 날씨누리", "https://www.weather.go.kr/w/index.do")
-st.sidebar.link_button("💧 국가가뭄정보포털", "https://www.drought.go.kr/main.do")
-st.sidebar.link_button("🌍 기후변화 상황지도", "https://climate.go.kr/atlas/")
-st.sidebar.link_button("🌾 농업가뭄관리시스템", "https://adms.ekr.or.kr/page/main.do")
-st.sidebar.link_button("🌐 earth 전세계 기상지도", "https://earth.nullschool.net/ko/#current/particulates/surface/level/overlay=pm2.5/orthographic=-238.18,22.58,577")
-st.sidebar.link_button("⛰️ 산악기상정보시스템", "https://mtweather.nifos.go.kr/")
-st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/realSearch?pMENU_NO=97")
-
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 데이터 로딩
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -309,6 +299,17 @@ if st.session_state.df is not None:
         filtered_df = st.session_state.df.copy()
 else:
     filtered_df = None
+
+# 관련 사이트 — 사이드바 제일 하단
+st.sidebar.markdown("---")
+st.sidebar.markdown("**🔗 관련 사이트**")
+st.sidebar.link_button("🌤️ 기상청 날씨누리", "https://www.weather.go.kr/w/index.do")
+st.sidebar.link_button("💧 국가가뭄정보포털", "https://www.drought.go.kr/main.do")
+st.sidebar.link_button("🌍 기후변화 상황지도", "https://climate.go.kr/atlas/")
+st.sidebar.link_button("🌾 농업가뭄관리시스템", "https://adms.ekr.or.kr/page/main.do")
+st.sidebar.link_button("🌐 earth 전세계 기상지도", "https://earth.nullschool.net/ko/#current/particulates/surface/level/overlay=pm2.5/orthographic=-238.18,22.58,577")
+st.sidebar.link_button("⛰️ 산악기상정보시스템", "https://mtweather.nifos.go.kr/")
+st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/realSearch?pMENU_NO=97")
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 탭 생성 (8탭)
