@@ -592,9 +592,117 @@ def render(df: pd.DataFrame) -> None:
 # 추가 분석 함수
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def _calc_mv_ratio(df: pd.DataFrame, stn: str) -> pd.DataFrame:
+    """
+    MV 커브 계산 — 연도별 월별 누적강수량 비율 (0~1).
+    Returns DataFrame: index=year, columns=month(1~12)
+    """
+    sdf = df[df["station_name"] == stn].copy()
+    monthly = sdf.groupby(["year", "month"])["precipitation"].sum().unstack("month")  # year × month
+    monthly = monthly.reindex(columns=range(1, 13))  # 1~12월 보장
+    annual = monthly.sum(axis=1)
+    cumulative = monthly.cumsum(axis=1)
+    ratio = cumulative.div(annual, axis=0).round(4)
+    return ratio
+
+
+def _plot_mv_curves(ratio: pd.DataFrame, stn: str) -> go.Figure:
+    """
+    MV 커브 Plotly 차트.
+    ratio: index=year, columns=month(1~12)
+    각 연도 = 회색 가는 선, 전체·10년·30년 평균 = 굵은 색 선
+    """
+    months = list(range(1, 13))
+    month_labels = [f"{m}월" for m in months]
+    years = sorted(ratio.index.tolist())
+    n = len(years)
+    recent_10 = [y for y in years if y >= years[-1] - 9]
+    recent_30 = [y for y in years if y >= years[-1] - 29]
+
+    fig = go.Figure()
+
+    # 개별 연도 선 (회색, 반투명)
+    for yr in years:
+        row = ratio.loc[yr]
+        vals = [row.get(m, float("nan")) for m in months]
+        fig.add_trace(go.Scatter(
+            x=month_labels, y=vals,
+            mode="lines",
+            line=dict(color="lightgray", width=0.8),
+            opacity=0.6,
+            name=str(yr),
+            legendgroup="years",
+            showlegend=False,
+            hovertemplate=f"{yr}년: %{{y:.3f}}<extra></extra>",
+        ))
+
+    # 전체 평균
+    mean_all = ratio.mean()
+    fig.add_trace(go.Scatter(
+        x=month_labels, y=[mean_all.get(m, float("nan")) for m in months],
+        mode="lines+markers",
+        line=dict(color="#1F4E79", width=2.5),
+        marker=dict(size=6),
+        name=f"전체 평균 ({years[0]}~{years[-1]})",
+        hovertemplate="전체평균: %{y:.3f}<extra></extra>",
+    ))
+
+    # 10년 평균
+    if len(recent_10) >= 3:
+        mean_10 = ratio.loc[recent_10].mean()
+        fig.add_trace(go.Scatter(
+            x=month_labels, y=[mean_10.get(m, float("nan")) for m in months],
+            mode="lines+markers",
+            line=dict(color="#E74C3C", width=2.5, dash="dash"),
+            marker=dict(size=6),
+            name=f"최근 10년 평균 ({recent_10[0]}~{recent_10[-1]})",
+            hovertemplate="최근10년: %{y:.3f}<extra></extra>",
+        ))
+
+    # 30년 평균 (평년)
+    if len(recent_30) >= 10 and len(recent_30) != n:
+        mean_30 = ratio.loc[recent_30].mean()
+        fig.add_trace(go.Scatter(
+            x=month_labels, y=[mean_30.get(m, float("nan")) for m in months],
+            mode="lines+markers",
+            line=dict(color="#27AE60", width=2.5, dash="dot"),
+            marker=dict(size=6),
+            name=f"최근 30년 평균 ({recent_30[0]}~{recent_30[-1]})",
+            hovertemplate="최근30년: %{y:.3f}<extra></extra>",
+        ))
+
+    # 표준편차 밴드 (전체 평균 ±1σ)
+    std_all = ratio.std()
+    upper = (mean_all + std_all).clip(upper=1.0)
+    lower = (mean_all - std_all).clip(lower=0.0)
+    u_vals = [upper.get(m, float("nan")) for m in months]
+    l_vals = [lower.get(m, float("nan")) for m in months]
+    fig.add_trace(go.Scatter(
+        x=month_labels + month_labels[::-1],
+        y=u_vals + l_vals[::-1],
+        fill="toself",
+        fillcolor="rgba(31,78,121,0.08)",
+        line=dict(color="rgba(0,0,0,0)"),
+        name="±1σ 범위",
+        hoverinfo="skip",
+        showlegend=True,
+    ))
+
+    fig.update_layout(
+        title=dict(text=f"{stn} MV 커브 (누적강수량 비율)", font=dict(size=16)),
+        xaxis=dict(title="월", tickmode="array", tickvals=month_labels, ticktext=month_labels),
+        yaxis=dict(title="누적강수량 / 연강수량", range=[-0.02, 1.05],
+                   tickformat=".1%"),
+        height=460,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
+    )
+    return fig
+
+
 def _tab_cumulative(df: pd.DataFrame) -> None:
-    """누적강수량 분석 — 월별 × 연도별 매트릭스"""
-    st.markdown("### 📊 누적강수량 분석 (연도별 월별 강수량)")
+    """누적강수량 분석 — 월별 × 연도별 매트릭스 + MV 커브"""
+    st.markdown("### 📊 누적강수량 분석")
 
     if not _has_col(df, "precipitation", "year", "month", "station_name"):
         st.warning("강수량 데이터가 없습니다.")
@@ -604,17 +712,56 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
     stn = st.selectbox("관측소", stations, key="precip_cumul_stn")
     sdf = df[df["station_name"] == stn].copy()
 
+    # ── MV 커브 ─────────────────────────────────────────────
+    st.markdown("#### 📈 MV 커브 (누적강수 비율 곡선)")
+    st.caption(
+        "x축: 월(1~12), y축: 해당 월까지의 누적강수량 ÷ 연강수량. "
+        "회색 선 = 개별 연도, 색 선 = 기간별 평균."
+    )
+
+    ratio = _calc_mv_ratio(df, stn)
+    if not ratio.empty:
+        fig_mv = _plot_mv_curves(ratio, stn)
+        st.plotly_chart(fig_mv, use_container_width=True)
+
+        # MV 커브 비율 테이블 (expander)
+        with st.expander("MV 커브 수치 데이터 (연도별 월별 누적 비율)"):
+            display_ratio = ratio.copy()
+            display_ratio.index.name = "연도"
+            display_ratio.columns = [f"{m}월" for m in display_ratio.columns]
+            # 전체 평균·최근10년·최근30년 행 추가
+            years = sorted(ratio.index.tolist())
+            r10 = [y for y in years if y >= years[-1] - 9]
+            r30 = [y for y in years if y >= years[-1] - 29]
+            avg_row = ratio.mean().rename("전체평균")
+            display_ratio.loc["전체평균"] = avg_row.values
+            if len(r10) >= 3:
+                display_ratio.loc[f"최근10년평균"] = ratio.loc[r10].mean().values
+            if len(r30) >= 10:
+                display_ratio.loc[f"최근30년평균"] = ratio.loc[r30].mean().values
+            display_ratio.columns = [f"{m}월" for m in range(1, 13)]
+            st.dataframe(
+                display_ratio.style.format("{:.3f}", na_rep="-"),
+                use_container_width=True,
+                height=min(420, len(display_ratio) * 35 + 60),
+            )
+            mv_csv = display_ratio.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
+            st.download_button(
+                "⬇️ MV 커브 CSV", mv_csv, f"{stn}_MV커브.csv", "text/csv",
+                key="mv_csv"
+            )
+    else:
+        st.warning("MV 커브 계산에 필요한 데이터가 부족합니다.")
+
+    st.markdown("---")
+
+    # ── 기존: 월별 강수량 매트릭스 & 히트맵 ──────────────────
     monthly = sdf.groupby(["year", "month"])["precipitation"].sum().reset_index()
     pivot = monthly.pivot(index="month", columns="year", values="precipitation").round(1)
-
-    # 인덱스를 문자열로 변환 (숫자+문자 혼합 방지 → Arrow 직렬화 오류 방지)
     pivot.index = [f"{m}월" for m in pivot.index]
     pivot.index.name = "월"
-    # 컬럼도 문자열로
     pivot.columns = [str(c) for c in pivot.columns]
     pivot.columns.name = "연도"
-
-    # 합계·평균 행/열 추가
     pivot.loc["합계"] = pivot.sum()
     pivot["월평균"] = pivot.iloc[:-1].mean(axis=1).round(1)
     pivot.loc["합계", "월평균"] = float("nan")
@@ -625,7 +772,7 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
     csv = pivot.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", csv, f"{stn}_누적강수량.csv", "text/csv", key="precip_cumul_csv")
 
-    # 히트맵 (합계행 제외)
+    # 히트맵
     hm_data = monthly.pivot(index="year", columns="month", values="precipitation").fillna(0)
     hm_data.columns = [f"{m}월" for m in hm_data.columns]
     fig = px.imshow(

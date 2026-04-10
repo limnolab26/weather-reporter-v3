@@ -269,6 +269,90 @@ def _chart_precip_trend(df: pd.DataFrame) -> bytes | None:
     return buf.read()
 
 
+def _chart_mv_curves(df: pd.DataFrame) -> bytes | None:
+    """MV 커브 (누적강수 비율) matplotlib 차트."""
+    if "station_name" not in df.columns or not _has(df, "precipitation"):
+        return None
+    if "year" not in df.columns or "month" not in df.columns:
+        return None
+
+    stations = df["station_name"].dropna().unique()
+    n_stations = len(stations)
+    if n_stations == 0:
+        return None
+
+    cols_per_row = min(n_stations, 2)
+    n_rows = (n_stations + cols_per_row - 1) // cols_per_row
+    fig, axes = plt.subplots(
+        n_rows, cols_per_row,
+        figsize=(CHART_WIDTH * cols_per_row / 2 + 1, CHART_HEIGHT_INCH * n_rows),
+        dpi=CHART_DPI,
+        squeeze=False,
+    )
+    axes_flat = axes.flatten()
+
+    month_labels = [f"{m}월" for m in range(1, 13)]
+
+    for ax_idx, stn in enumerate(stations):
+        ax = axes_flat[ax_idx]
+        sdf = df[df["station_name"] == stn]
+        monthly = sdf.groupby(["year", "month"])["precipitation"].sum().unstack("month")
+        monthly = monthly.reindex(columns=range(1, 13))
+        annual = monthly.sum(axis=1)
+        ratio = monthly.cumsum(axis=1).div(annual, axis=0)
+
+        years = sorted(ratio.index.tolist())
+        recent_10 = [y for y in years if y >= years[-1] - 9]
+        recent_30 = [y for y in years if y >= years[-1] - 29]
+
+        # 개별 연도 (회색)
+        for yr in years:
+            row = ratio.loc[yr].values.tolist()
+            ax.plot(range(1, 13), row, color="lightgray", lw=0.7, alpha=0.5)
+
+        # 전체 평균
+        mean_all = ratio.mean().values
+        ax.plot(range(1, 13), mean_all, color="#1F4E79", lw=2.2,
+                label=f"전체평균 ({years[0]}~{years[-1]})", marker="o", ms=4)
+
+        # 10년 평균
+        if len(recent_10) >= 3:
+            m10 = ratio.loc[recent_10].mean().values
+            ax.plot(range(1, 13), m10, color="#E74C3C", lw=2.0, ls="--",
+                    label=f"최근10년 ({recent_10[0]}~{recent_10[-1]})", marker="^", ms=4)
+
+        # 30년 평균
+        if len(recent_30) >= 10 and len(recent_30) != len(years):
+            m30 = ratio.loc[recent_30].mean().values
+            ax.plot(range(1, 13), m30, color="#27AE60", lw=2.0, ls=":",
+                    label=f"최근30년 ({recent_30[0]}~{recent_30[-1]})", marker="s", ms=4)
+
+        ax.set_xticks(range(1, 13))
+        ax.set_xticklabels(month_labels, fontproperties=KR_FONT, fontsize=8)
+        ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        ax.set_yticklabels(["0%", "20%", "40%", "60%", "80%", "100%"], fontsize=8)
+        ax.set_ylim(-0.02, 1.05)
+        ax.set_title(f"{stn} MV 커브", fontproperties=KR_FONT, fontsize=11, fontweight="bold")
+        ax.set_xlabel("월", fontproperties=KR_FONT, fontsize=9)
+        ax.set_ylabel("누적강수량 / 연강수량", fontproperties=KR_FONT, fontsize=9)
+        ax.legend(prop={"family": KR_FONT}, fontsize=8, loc="upper left")
+        ax.grid(True, alpha=0.3)
+
+    # 남은 subplot 숨기기
+    for ax_idx in range(n_stations, len(axes_flat)):
+        axes_flat[ax_idx].set_visible(False)
+
+    plt.suptitle("MV 커브 (누적강수 비율 곡선)", fontproperties=KR_FONT,
+                 fontsize=13, fontweight="bold", y=1.01)
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=CHART_DPI, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
 def _chart_monthly_bar(df: pd.DataFrame) -> bytes | None:
     """월별 평균 기온·강수량 이중 축 차트."""
     if "month" not in df.columns:
@@ -544,6 +628,17 @@ class DocxReportGenerator:
         if img3:
             _add_heading(doc, "2.3 월별 기온·강수량", 2)
             _add_chart_image(doc, img3, "그림 3. 월별 평균 기온 및 강수량 분포")
+            doc.add_paragraph()
+
+        img4 = _chart_mv_curves(df)
+        if img4:
+            _add_heading(doc, "2.4 MV 커브 (누적강수 비율 곡선)", 2)
+            doc.add_paragraph(
+                "MV 커브는 월별 누적강수량을 연강수량으로 나눈 비율(0~1)을 나타냅니다. "
+                "곡선의 기울기가 급한 구간이 강수 집중 시기이며, "
+                "여름철(6~9월)에 집중되는 한국의 계절 강수 패턴을 시각적으로 확인할 수 있습니다."
+            )
+            _add_chart_image(doc, img4, "그림 4. MV 커브 — 회색: 개별 연도, 색선: 기간별 평균")
             doc.add_paragraph()
 
         doc.add_page_break()
