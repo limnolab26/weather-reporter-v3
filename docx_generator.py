@@ -353,6 +353,148 @@ def _chart_mv_curves(df: pd.DataFrame) -> bytes | None:
     return buf.read()
 
 
+def _chart_annual_temp_precip(df: pd.DataFrame) -> bytes | None:
+    """그림 2-1 스타일: 연도별 기온 + 강수 (2개 subplot)."""
+    if "year" not in df.columns:
+        return None
+    has_t = _has(df, "temp_avg") or _has(df, "temp_max") or _has(df, "temp_min")
+    has_p = _has(df, "precipitation")
+    if not has_t and not has_p:
+        return None
+
+    stations = df["station_name"].dropna().unique().tolist() if "station_name" in df.columns else []
+    multi_station = len(stations) > 1
+    colors = plt.cm.Set1.colors if multi_station else [("#2E75B6", "#E67E22", "#95A5A6")]
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(CHART_WIDTH, CHART_HEIGHT_INCH * 2.2), dpi=CHART_DPI)
+
+    # ─ 상단: 기온 라인 차트 ─
+    if has_t:
+        if multi_station:
+            for idx, stn in enumerate(stations):
+                sdf = df[df["station_name"] == stn]
+                c = colors[idx % len(colors)]
+                if _has(sdf, "temp_avg"):
+                    avg = sdf.groupby("year")["temp_avg"].mean().dropna()
+                    ax1.plot(avg.index, avg.values, "o-", color=c, lw=2, ms=5, label=f"{stn} 평균기온(℃)")
+        else:
+            sdf = df
+            t_color, tmax_color, tmin_color = "#2E75B6", "#E67E22", "#95A5A6"
+            if _has(sdf, "temp_avg"):
+                avg = sdf.groupby("year")["temp_avg"].mean().dropna()
+                ax1.plot(avg.index, avg.values, "o-", color=t_color, lw=2, ms=5, label="평균기온(℃)")
+            if _has(sdf, "temp_max"):
+                tmax = sdf.groupby("year")["temp_max"].mean().dropna()
+                ax1.plot(tmax.index, tmax.values, "o-", color=tmax_color, lw=2, ms=5, label="평균최고기온(℃)")
+            if _has(sdf, "temp_min"):
+                tmin = sdf.groupby("year")["temp_min"].mean().dropna()
+                ax1.plot(tmin.index, tmin.values, "o-", color=tmin_color, lw=2, ms=5, label="평균최저기온(℃)")
+
+    ax1.set_xlabel("연도", fontproperties=KR_FONT, fontsize=10)
+    ax1.set_ylabel("기온 (℃)", fontproperties=KR_FONT, fontsize=10)
+    ax1.legend(prop={"family": KR_FONT}, fontsize=9)
+    ax1.grid(True, alpha=0.3)
+
+    # ─ 하단: 강수 막대+선 이중축 ─
+    if has_p:
+        if multi_station:
+            bar_width = 0.8 / max(len(stations), 1)
+            for idx, stn in enumerate(stations):
+                sdf = df[df["station_name"] == stn]
+                if not _has(sdf, "precipitation"):
+                    continue
+                annual_p = sdf.groupby("year")["precipitation"].sum().dropna()
+                c = colors[idx % len(colors)]
+                offset = (idx - len(stations) / 2 + 0.5) * bar_width
+                ax2.bar(annual_p.index + offset, annual_p.values, width=bar_width,
+                        color=c, alpha=0.7, label=f"{stn} 연강수량")
+        else:
+            annual_p = df.groupby("year")["precipitation"].sum().dropna()
+            ax2.bar(annual_p.index, annual_p.values, color="#3498DB", alpha=0.7, label="연강수량")
+            ax2_twin = ax2.twinx()
+            monthly_avg = annual_p / 12
+            ax2_twin.plot(annual_p.index, monthly_avg.values, "o-", color="#E67E22", lw=2, ms=5,
+                          label="월평균강수량")
+            ax2_twin.set_ylabel("월평균강수량 (mm)", fontproperties=KR_FONT, fontsize=10)
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            lines3, labels3 = ax2_twin.get_legend_handles_labels()
+            ax2.legend(lines2 + lines3, labels2 + labels3, prop={"family": KR_FONT}, fontsize=9)
+
+    ax2.set_xlabel("연도", fontproperties=KR_FONT, fontsize=10)
+    ax2.set_ylabel("연강수량 (mm)", fontproperties=KR_FONT, fontsize=10)
+    if multi_station:
+        ax2.legend(prop={"family": KR_FONT}, fontsize=9)
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=CHART_DPI, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
+def _chart_monthly_boxplot(df: pd.DataFrame) -> bytes | None:
+    """그림 2-2 스타일: 월별 박스플롯 (강수량 + 기온 2개 subplot)."""
+    if "month" not in df.columns or "year" not in df.columns:
+        return None
+    has_p = _has(df, "precipitation")
+    has_t = _has(df, "temp_avg")
+    if not has_p and not has_t:
+        return None
+
+    # 복수 관측소면 첫 번째 관측소만 사용
+    if "station_name" in df.columns and df["station_name"].nunique() > 1:
+        first_stn = df["station_name"].dropna().unique()[0]
+        df = df[df["station_name"] == first_stn]
+
+    month_labels = ["1월", "2월", "3월", "4월", "5월", "6월",
+                    "7월", "8월", "9월", "10월", "11월", "12월"]
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(CHART_WIDTH, CHART_HEIGHT_INCH * 2.2), dpi=CHART_DPI)
+
+    # ─ 상단: 월별 강수량 박스플롯 ─
+    if has_p:
+        monthly_precip = df.groupby(["year", "month"])["precipitation"].sum()
+        data_p = [
+            monthly_precip[monthly_precip.index.get_level_values("month") == m].values
+            for m in range(1, 13)
+        ]
+        bp1 = ax1.boxplot(data_p, patch_artist=True, flierprops={"marker": "o", "ms": 3})
+        for patch in bp1["boxes"]:
+            patch.set_facecolor("#3498DB")
+        ax1.set_xticklabels(month_labels, fontproperties=KR_FONT, fontsize=9)
+        ax1.set_ylabel("강수량 [mm]", fontproperties=KR_FONT, fontsize=10)
+        ax1.set_title("월별 강수량 분포", fontproperties=KR_FONT, fontsize=11, fontweight="bold")
+        ax1.grid(True, alpha=0.3)
+    else:
+        ax1.set_visible(False)
+
+    # ─ 하단: 월별 기온 박스플롯 ─
+    if has_t:
+        monthly_temp = df.groupby(["year", "month"])["temp_avg"].mean()
+        data_t = [
+            monthly_temp[monthly_temp.index.get_level_values("month") == m].values
+            for m in range(1, 13)
+        ]
+        bp2 = ax2.boxplot(data_t, patch_artist=True, flierprops={"marker": "o", "ms": 3})
+        for patch in bp2["boxes"]:
+            patch.set_facecolor("#E67E22")
+        ax2.set_xticklabels(month_labels, fontproperties=KR_FONT, fontsize=9)
+        ax2.set_ylabel("기온 [℃]", fontproperties=KR_FONT, fontsize=10)
+        ax2.set_title("월별 기온 분포", fontproperties=KR_FONT, fontsize=11, fontweight="bold")
+        ax2.grid(True, alpha=0.3)
+    else:
+        ax2.set_visible(False)
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=CHART_DPI, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
 def _chart_monthly_bar(df: pd.DataFrame) -> bytes | None:
     """월별 평균 기온·강수량 이중 축 차트."""
     if "month" not in df.columns:
@@ -513,6 +655,16 @@ class DocxReportGenerator:
             section.right_margin = Cm(2.5)
 
         self._write_cover(doc, df)
+
+        # 기상개황 (보고서 예시 스타일)
+        self._write_weather_overview(doc, df)
+        self._write_chart_annual(doc, df)
+        doc.add_page_break()
+        self._write_climate_monthly_table(doc, df)
+        self._write_chart_monthly(doc, df)
+        doc.add_page_break()
+
+        # 기존 섹션
         self._write_summary(doc, df)
         self._write_charts(doc, df)
         self._write_monthly_table(doc, df)
@@ -576,6 +728,247 @@ class DocxReportGenerator:
             cell_r.paragraphs[0].runs[0].font.size = Pt(11)
 
         doc.add_page_break()
+
+    def _write_weather_overview(self, doc: "Document", df: pd.DataFrame) -> None:
+        """기상개황 — 표 2-1 스타일."""
+        _add_heading(doc, "1. 기상개황", 1)
+        _add_heading(doc, "1.1 연도별 기상개황", 2)
+        doc.add_paragraph("분석 기간 중 연도별 기상요소 현황입니다.")
+
+        if "year" not in df.columns:
+            doc.add_paragraph("(연도 데이터 없음)")
+            return
+
+        stations = (
+            df["station_name"].dropna().unique().tolist()
+            if "station_name" in df.columns
+            else ["전체"]
+        )
+        years = sorted(df["year"].dropna().unique().astype(int).tolist())
+        year_cols = [str(y) for y in years]
+
+        # 연도 범위 각주용
+        start_yr = years[0] if years else ""
+        end_yr = years[-1] if years else ""
+
+        for stn in stations:
+            _add_heading(doc, f"{stn} 관측소 기상개황", 3)
+
+            sdf = df[df["station_name"] == stn] if "station_name" in df.columns else df
+
+            rows = []
+
+            # 평균기온 3행
+            for sub, col, agg_fn in [
+                ("평균", "temp_avg", "mean"),
+                ("최고", "temp_max", "mean"),
+                ("최저", "temp_min", "mean"),
+            ]:
+                if _has(sdf, col):
+                    annual = sdf.groupby("year")[col].agg(agg_fn).round(1)
+                    label = "평균기온(℃)" if sub == "평균" else ""
+                    vals = {str(y): f"{annual.get(y, float('nan')):.1f}" if y in annual.index else "-"
+                            for y in years}
+                    mean_val = annual.mean()
+                    rows.append({"항목": label, "구분": sub,
+                                 **vals, "평균": f"{mean_val:.1f}"})
+
+            # 평균월강수량
+            if _has(sdf, "precipitation"):
+                annual_p = sdf.groupby("year")["precipitation"].sum().round(1)
+                monthly_p = (annual_p / 12).round(1)
+                vals = {str(y): f"{monthly_p.get(y, float('nan')):.1f}" if y in monthly_p.index else "-"
+                        for y in years}
+                rows.append({"항목": "평균월강수량(mm)", "구분": "",
+                             **vals, "평균": f"{monthly_p.mean():.1f}"})
+
+            # 평균풍속
+            if _has(sdf, "wind_speed"):
+                annual_ws = sdf.groupby("year")["wind_speed"].mean().round(1)
+                vals = {str(y): f"{annual_ws.get(y, float('nan')):.1f}" if y in annual_ws.index else "-"
+                        for y in years}
+                rows.append({"항목": "평균풍속(m/s)", "구분": "",
+                             **vals, "평균": f"{annual_ws.mean():.1f}"})
+
+            # 최대순간풍속
+            if _has(sdf, "wind_max"):
+                annual_wm = sdf.groupby("year")["wind_max"].max().round(1)
+                vals = {str(y): f"{annual_wm.get(y, float('nan')):.1f}" if y in annual_wm.index else "-"
+                        for y in years}
+                rows.append({"항목": "최대순간풍속(m/s)", "구분": "",
+                             **vals, "평균": f"{annual_wm.mean():.1f}"})
+
+            if rows:
+                overview_df = pd.DataFrame(rows, columns=["항목", "구분"] + year_cols + ["평균"])
+                _add_df_table(doc, overview_df)
+                doc.add_paragraph()
+
+            # 월별 강수 피벗표
+            if _has(sdf, "precipitation") and "month" in sdf.columns:
+                _add_heading(doc, f"{stn} 관측소 월별 강수량 현황", 3)
+                mp = sdf.groupby(["year", "month"])["precipitation"].sum().unstack("month")
+                mp = mp.reindex(columns=range(1, 13))
+                mp.columns = [f"{m}월" for m in range(1, 13)]
+                mp["합계"] = mp.sum(axis=1)
+                mp.index.name = "연도"
+                mp = mp.reset_index()
+                mp["연도"] = mp["연도"].astype(int).astype(str)
+
+                # 하단 통계행
+                precip_cols = [f"{m}월" for m in range(1, 13)] + ["합계"]
+                numeric_mp = mp.set_index("연도")[precip_cols]
+                avg_row = {"연도": "평균"}
+                max_row = {"연도": "최대"}
+                min_row = {"연도": "최소"}
+                for c in precip_cols:
+                    avg_row[c] = f"{numeric_mp[c].mean():.1f}"
+                    max_row[c] = f"{numeric_mp[c].max():.1f}"
+                    min_row[c] = f"{numeric_mp[c].min():.1f}"
+
+                mp_str = mp.copy()
+                for c in precip_cols:
+                    mp_str[c] = mp_str[c].apply(
+                        lambda v: f"{v:.1f}" if pd.notna(v) else "-"
+                    )
+                stat_rows = pd.DataFrame([avg_row, max_row, min_row])
+                mp_final = pd.concat([mp_str, stat_rows], ignore_index=True)
+                _add_df_table(doc, mp_final)
+                doc.add_paragraph()
+
+        note = doc.add_paragraph(f"※ 자료 : 기상자료개방포털({start_yr}~{end_yr})")
+        note.runs[0].font.italic = True
+        note.runs[0].font.size = Pt(9)
+        note.runs[0].font.color.rgb = RGBColor(0x60, 0x60, 0x60)
+
+    def _write_chart_annual(self, doc: "Document", df: pd.DataFrame) -> None:
+        """연도별 기상 현황 차트 — 그림 2-1."""
+        img = _chart_annual_temp_precip(df)
+        if img:
+            _add_heading(doc, "1.2 연도별 기상 현황", 2)
+            doc.add_paragraph("연도별 기온 추이(상) 및 강수량 현황(하)입니다.")
+            _add_chart_image(doc, img, "그림 1. 연평균 기상 개황도")
+            doc.add_paragraph()
+
+    def _write_climate_monthly_table(self, doc: "Document", df: pd.DataFrame) -> None:
+        """월별 기후통계표 — 표 2-2 스타일."""
+        _add_heading(doc, "2. 월별 기후통계", 1)
+        _add_heading(doc, "2.1 월별 기후통계표", 2)
+
+        if "month" not in df.columns:
+            doc.add_paragraph("(월 데이터 없음)")
+            return
+
+        if "year" not in df.columns:
+            doc.add_paragraph("(연도 데이터 없음)")
+            return
+
+        stations = (
+            df["station_name"].dropna().unique().tolist()
+            if "station_name" in df.columns
+            else ["전체"]
+        )
+        month_labels = [f"{m}월" for m in range(1, 13)]
+        start_yr = int(df["year"].min()) if "year" in df.columns else ""
+        end_yr = int(df["year"].max()) if "year" in df.columns else ""
+
+        for stn in stations:
+            _add_heading(doc, f"{stn} 관측소 월별 기후통계", 3)
+            sdf = df[df["station_name"] == stn] if "station_name" in df.columns else df
+
+            def _monthly_stat(col, agg_fn):
+                if not _has(sdf, col):
+                    return None
+                grp = sdf.groupby("month")[col].agg(agg_fn).reindex(range(1, 13))
+                return grp
+
+            def _monthly_extreme(col, agg_fn):
+                if not _has(sdf, col):
+                    return None
+                return sdf.groupby("month")[col].agg(agg_fn).reindex(range(1, 13))
+
+            def _fmt(series, last_label):
+                if series is None:
+                    return ["-"] * 12 + ["-"]
+                vals = [f"{v:.1f}" if pd.notna(v) else "-" for v in series.values]
+                summary = series.mean() if last_label == "평균" else series.sum()
+                return vals + [f"{summary:.1f}" if pd.notna(summary) else "-"]
+
+            rows = []
+
+            col_header = ["구분", "소구분"] + month_labels + ["평균/합계"]
+
+            # 기온
+            temp_defs = [
+                ("기온(℃)", "평균", "temp_avg", "mean", "평균"),
+                ("", "평균최고", "temp_max", "mean", "평균"),
+                ("", "최고극값", "temp_max", "max", "평균"),
+                ("", "평균최저", "temp_min", "mean", "평균"),
+                ("", "최저극값", "temp_min", "min", "평균"),
+            ]
+            for cat, sub, col, fn, last_lbl in temp_defs:
+                series = _monthly_extreme(col, fn) if fn in ("max", "min") else _monthly_stat(col, fn)
+                rows.append([cat, sub] + _fmt(series, last_lbl))
+
+            # 강수량
+            precip_defs = [
+                ("강수량(mm)", "평균", "precipitation", lambda s: s.sum() / sdf["year"].nunique()
+                    if "year" in sdf.columns else s.sum(), "합계"),
+                ("", "최대", "precipitation", "max", "합계"),
+                ("", "최소", "precipitation", "min", "합계"),
+            ]
+            for cat, sub, col, fn, last_lbl in precip_defs:
+                if not _has(sdf, col):
+                    rows.append([cat, sub] + ["-"] * 13)
+                    continue
+                if callable(fn):
+                    series = sdf.groupby("month")[col].agg(fn).reindex(range(1, 13))
+                else:
+                    series = sdf.groupby("month")[col].agg(fn).reindex(range(1, 13))
+                rows.append([cat, sub] + _fmt(series, last_lbl))
+
+            # 상대습도
+            humidity_defs = [
+                ("상대습도(%)", "평균", "humidity", "mean", "평균"),
+                ("", "최소", "humidity", "min", "평균"),
+            ]
+            for cat, sub, col, fn, last_lbl in humidity_defs:
+                series = _monthly_stat(col, fn)
+                rows.append([cat, sub] + _fmt(series, last_lbl))
+
+            # 일조시간
+            sunshine_defs = [
+                ("일조시간(hr)", "", "sunshine_hours", "sum", "합계"),
+            ]
+            for cat, sub, col, fn, last_lbl in sunshine_defs:
+                series = _monthly_stat(col, fn) if _has(sdf, col) else None
+                rows.append([cat, sub] + _fmt(series, last_lbl))
+
+            # 바람
+            wind_defs = [
+                ("바람(m/s)", "평균풍속", "wind_speed", "mean", "평균"),
+                ("", "최대풍속", "wind_max", "max", "평균"),
+            ]
+            for cat, sub, col, fn, last_lbl in wind_defs:
+                series = _monthly_stat(col, fn)
+                rows.append([cat, sub] + _fmt(series, last_lbl))
+
+            climate_df = pd.DataFrame(rows, columns=col_header)
+            _add_df_table(doc, climate_df)
+            doc.add_paragraph()
+
+        note = doc.add_paragraph(f"※ 자료 : 기상자료개방포털({start_yr}~{end_yr})")
+        note.runs[0].font.italic = True
+        note.runs[0].font.size = Pt(9)
+        note.runs[0].font.color.rgb = RGBColor(0x60, 0x60, 0x60)
+
+    def _write_chart_monthly(self, doc: "Document", df: pd.DataFrame) -> None:
+        """월별 기상 현황 박스플롯 차트 — 그림 2-2."""
+        img = _chart_monthly_boxplot(df)
+        if img:
+            _add_heading(doc, "2.2 월별 기상 현황", 2)
+            doc.add_paragraph("월별 강수량(상) 및 기온(하) 분포입니다.")
+            _add_chart_image(doc, img, "그림 2. 월 평균 기상 현황도")
+            doc.add_paragraph()
 
     def _write_summary(self, doc: "Document", df: pd.DataFrame) -> None:
         """2. 주요 지표 요약."""

@@ -210,6 +210,8 @@ class ExcelReportGenerator:
         self._sheet_cumulative_precip(wb, df2)
         self._sheet_rainfall_days(wb, df2)
         self._sheet_pivot(wb, df2)
+        self._sheet_weather_overview(wb, df2)
+        self._sheet_climate_monthly(wb, df2)
 
         output = io.BytesIO()
         wb.save(output)
@@ -1341,3 +1343,579 @@ class ExcelReportGenerator:
                     r += 1
 
             r += 2
+
+    # ──────────────────────────────────
+    # 9. 기상개황 시트 (표 2-1)
+    # ──────────────────────────────────
+
+    def _sheet_weather_overview(self, wb, df):
+        ws = wb.create_sheet("📋 기상개황")
+        ws.sheet_view.showGridLines = False
+
+        stations = df['station_name'].unique() if self._has_stn else ['전체']
+        years = sorted(df['year'].dropna().unique().astype(int).tolist())
+        n_years = len(years)
+
+        # 컬럼 폭 설정: A=항목(18), B=구분(8), C~(연도별 8), 마지막=평균(10)
+        ws.column_dimensions['A'].width = 18
+        ws.column_dimensions['B'].width = 8
+        for ci in range(3, 3 + n_years):
+            ws.column_dimensions[get_column_letter(ci)].width = 8
+        avg_col = 3 + n_years
+        ws.column_dimensions[get_column_letter(avg_col)].width = 10
+
+        yr_min = years[0] if years else '-'
+        yr_max = years[-1] if years else '-'
+
+        r = 1
+        total_width = 2 + n_years + 1
+        _title(ws, r, 1, total_width, '기상개황', h=28, sz=14)
+        r += 1
+
+        for stn in stations:
+            sdf = df[df['station_name'] == stn].copy() if self._has_stn else df.copy()
+
+            if self._has_stn:
+                _title(ws, r, 1, total_width,
+                       f'▶ {stn} 관측소', h=22, bg=C['mid_blue'], sz=11)
+                r += 1
+
+            _title(ws, r, 1, total_width,
+                   '표 2-1. 연도별 기상개황', h=20, bg=C['mid_blue'], sz=10)
+            r += 1
+
+            # 헤더
+            _hc(ws, r, 1, '항목', bg=C['dark_blue'])
+            _hc(ws, r, 2, '구분', bg=C['dark_blue'])
+            for ci, yr in enumerate(years, 3):
+                _hc(ws, r, ci, str(yr), bg=C['dark_blue'])
+            _hc(ws, r, avg_col, '평균', bg=C['dark_blue'])
+            r += 1
+
+            # ── 기온 블록 ──
+            temp_items = [
+                ('temp_avg', '평균'),
+                ('temp_max', '최고'),
+                ('temp_min', '최저'),
+            ]
+            avail_temp = [(k, sl) for k, sl in temp_items if k in sdf.columns]
+
+            if avail_temp:
+                bg = C['light_blue']
+                merge_end = r + len(avail_temp) - 1
+                ws.merge_cells(start_row=r, start_column=1, end_row=merge_end, end_column=1)
+                c = ws.cell(row=r, column=1, value='평균기온(℃)')
+                c.font = Font(name=FONT, bold=True, size=9, color='000000')
+                c.fill = PatternFill(start_color=bg, end_color=bg, fill_type='solid')
+                c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                c.border = _thin()
+                for merge_r in range(r + 1, merge_end + 1):
+                    ws.cell(row=merge_r, column=1).border = _thin()
+                    ws.cell(row=merge_r, column=1).fill = PatternFill(
+                        start_color=bg, end_color=bg, fill_type='solid')
+
+                for col_key, sub_label in avail_temp:
+                    _dc(ws, r, 2, sub_label, bg=bg, bold=True)
+                    yr_vals = []
+                    for ci, yr in enumerate(years, 3):
+                        ydf = sdf[sdf['year'] == yr]
+                        v = _safe_val(ydf[col_key].mean() if not ydf.empty else None)
+                        val = round(float(v), 1) if v is not None else None
+                        _dc(ws, r, ci, val, bg=bg, nf='0.0')
+                        yr_vals.append(val)
+                    valid_vals = [v for v in yr_vals if v is not None]
+                    avg_val = round(sum(valid_vals) / len(valid_vals), 1) if valid_vals else None
+                    _dc(ws, r, avg_col, avg_val, bg=bg, bold=True, nf='0.0')
+                    r += 1
+
+            # ── 평균월강수량 ──
+            if 'precipitation' in sdf.columns:
+                bg = C['light_green']
+                ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+                c = ws.cell(row=r, column=1, value='평균월강수량(mm)')
+                c.font = Font(name=FONT, bold=True, size=9, color='000000')
+                c.fill = PatternFill(start_color=bg, end_color=bg, fill_type='solid')
+                c.alignment = Alignment(horizontal='center', vertical='center')
+                c.border = _thin()
+                ws.cell(row=r, column=2).border = _thin()
+                ws.cell(row=r, column=2).fill = PatternFill(
+                    start_color=bg, end_color=bg, fill_type='solid')
+                yr_vals = []
+                for ci, yr in enumerate(years, 3):
+                    ydf = sdf[sdf['year'] == yr]
+                    v = _safe_val(ydf['precipitation'].sum() if not ydf.empty else None)
+                    val = round(float(v) / 12, 1) if v is not None else None
+                    _dc(ws, r, ci, val, bg=bg, nf='#,##0.0')
+                    yr_vals.append(val)
+                valid_vals = [v for v in yr_vals if v is not None]
+                avg_val = round(sum(valid_vals) / len(valid_vals), 1) if valid_vals else None
+                _dc(ws, r, avg_col, avg_val, bg=bg, bold=True, nf='#,##0.0')
+                r += 1
+
+            # ── 평균풍속 ──
+            if 'wind_speed' in sdf.columns:
+                bg = C['light_gray']
+                ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+                c = ws.cell(row=r, column=1, value='평균풍속(m/s)')
+                c.font = Font(name=FONT, bold=True, size=9, color='000000')
+                c.fill = PatternFill(start_color=bg, end_color=bg, fill_type='solid')
+                c.alignment = Alignment(horizontal='center', vertical='center')
+                c.border = _thin()
+                ws.cell(row=r, column=2).border = _thin()
+                ws.cell(row=r, column=2).fill = PatternFill(
+                    start_color=bg, end_color=bg, fill_type='solid')
+                yr_vals = []
+                for ci, yr in enumerate(years, 3):
+                    ydf = sdf[sdf['year'] == yr]
+                    v = _safe_val(ydf['wind_speed'].mean() if not ydf.empty else None)
+                    val = round(float(v), 1) if v is not None else None
+                    _dc(ws, r, ci, val, bg=bg, nf='0.0')
+                    yr_vals.append(val)
+                valid_vals = [v for v in yr_vals if v is not None]
+                avg_val = round(sum(valid_vals) / len(valid_vals), 1) if valid_vals else None
+                _dc(ws, r, avg_col, avg_val, bg=bg, bold=True, nf='0.0')
+                r += 1
+
+            # ── 최대순간풍속 ──
+            gust_col = ('wind_gust' if 'wind_gust' in sdf.columns
+                        else ('wind_max' if 'wind_max' in sdf.columns else None))
+            if gust_col:
+                bg = C['light_gray']
+                ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+                c = ws.cell(row=r, column=1, value='최대순간풍속(m/s)')
+                c.font = Font(name=FONT, bold=True, size=9, color='000000')
+                c.fill = PatternFill(start_color=bg, end_color=bg, fill_type='solid')
+                c.alignment = Alignment(horizontal='center', vertical='center')
+                c.border = _thin()
+                ws.cell(row=r, column=2).border = _thin()
+                ws.cell(row=r, column=2).fill = PatternFill(
+                    start_color=bg, end_color=bg, fill_type='solid')
+                yr_vals = []
+                for ci, yr in enumerate(years, 3):
+                    ydf = sdf[sdf['year'] == yr]
+                    v = _safe_val(ydf[gust_col].max() if not ydf.empty else None)
+                    val = round(float(v), 1) if v is not None else None
+                    _dc(ws, r, ci, val, bg=bg, nf='0.0')
+                    yr_vals.append(val)
+                valid_vals = [v for v in yr_vals if v is not None]
+                avg_val = round(sum(valid_vals) / len(valid_vals), 1) if valid_vals else None
+                _dc(ws, r, avg_col, avg_val, bg=bg, bold=True, nf='0.0')
+                r += 1
+
+            r += 1
+
+            # ── 강수현황 구분 헤더 ──
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=total_width)
+            c = ws.cell(row=r, column=1, value='강수현황(mm)')
+            c.font = Font(name=FONT, bold=True, size=10, color=C['white'])
+            c.fill = PatternFill(start_color=C['mid_blue'], end_color=C['mid_blue'], fill_type='solid')
+            c.alignment = Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[r].height = 20
+            r += 1
+
+            # ── 강수 피벗 헤더 ──
+            _hc(ws, r, 1, '년', bg=C['dark_blue'])
+            for mi in range(1, 13):
+                _hc(ws, r, mi + 1, f'{mi}월', bg=C['dark_blue'])
+            sum_col = 14
+            _hc(ws, r, sum_col, '합계', bg=C['dark_blue'])
+            r += 1
+
+            if 'precipitation' in sdf.columns:
+                # 피벗 데이터 계산
+                pivot_data = {}
+                for yr in years:
+                    ydf = sdf[sdf['year'] == yr]
+                    monthly_sums = {}
+                    for m in range(1, 13):
+                        mdf = ydf[ydf['month'] == m]
+                        v = _safe_val(mdf['precipitation'].sum() if not mdf.empty else 0.0)
+                        monthly_sums[m] = round(float(v), 1) if v is not None else 0.0
+                    pivot_data[yr] = monthly_sums
+
+                for yi, yr in enumerate(years):
+                    bg = C['light_green'] if yi % 2 == 0 else C['white']
+                    _dc(ws, r, 1, yr, bg=bg, bold=True)
+                    row_vals = []
+                    for mi, m in enumerate(range(1, 13), 2):
+                        val = pivot_data[yr].get(m, 0.0)
+                        _dc(ws, r, mi, val, bg=bg, nf='#,##0.0')
+                        row_vals.append(val)
+                    total = round(sum(v for v in row_vals if v is not None), 1)
+                    _dc(ws, r, sum_col, total, bg=bg, bold=True, nf='#,##0.0')
+                    r += 1
+
+                # 통계 행
+                for stat_name, bg, agg_fn in [
+                    ('평균', C['light_yellow'],
+                     lambda vals: round(sum(vals) / len(vals), 1) if vals else None),
+                    ('최대', C['light_orange'],
+                     lambda vals: round(max(vals), 1) if vals else None),
+                    ('최소', C['light_blue'],
+                     lambda vals: round(min(vals), 1) if vals else None),
+                ]:
+                    _dc(ws, r, 1, stat_name, bg=bg, bold=True)
+                    row_totals = []
+                    for mi, m in enumerate(range(1, 13), 2):
+                        col_vals_valid = [
+                            pivot_data[yr].get(m, 0.0)
+                            for yr in years
+                            if pivot_data[yr].get(m) is not None
+                        ]
+                        val = agg_fn(col_vals_valid)
+                        _dc(ws, r, mi, val, bg=bg, bold=True, nf='#,##0.0')
+                        if val is not None:
+                            row_totals.append(val)
+                    total_val = round(sum(row_totals), 1) if row_totals else None
+                    _dc(ws, r, sum_col, total_val, bg=bg, bold=True, nf='#,##0.0')
+                    r += 1
+
+            r += 1
+            _note(ws, r, 1, total_width,
+                  f'※ 자료 : 기상자료개방포털({yr_min}~{yr_max})')
+            r += 1
+
+            # ── 내장 차트 ──
+            chart_anchor_row = r + 2
+
+            # 차트1: 연도별 기온 꺾은선 (임시 데이터 영역 활용)
+            try:
+                if any(k in sdf.columns for k in ('temp_avg', 'temp_max', 'temp_min')):
+                    temp_chart_col = total_width + 2
+                    ws.cell(row=chart_anchor_row, column=temp_chart_col, value='연도')
+                    ws.cell(row=chart_anchor_row, column=temp_chart_col + 1, value='평균기온')
+                    ws.cell(row=chart_anchor_row, column=temp_chart_col + 2, value='최고기온')
+                    ws.cell(row=chart_anchor_row, column=temp_chart_col + 3, value='최저기온')
+
+                    for yi, yr in enumerate(years):
+                        row_idx = chart_anchor_row + 1 + yi
+                        ws.cell(row=row_idx, column=temp_chart_col, value=yr)
+                        for col_offset, col_key in enumerate(
+                                ['temp_avg', 'temp_max', 'temp_min'], 1):
+                            if col_key in sdf.columns:
+                                ydf = sdf[sdf['year'] == yr]
+                                v = _safe_val(ydf[col_key].mean() if not ydf.empty else None)
+                                ws.cell(row=row_idx, column=temp_chart_col + col_offset,
+                                        value=round(float(v), 1) if v is not None else None)
+
+                    data_end_row = chart_anchor_row + len(years)
+                    lc = LineChart()
+                    lc.title = '연도별 기온 추이'
+                    lc.style = 10
+                    lc.y_axis.title = '기온(℃)'
+                    lc.x_axis.title = '연도'
+                    lc.width = 20
+                    lc.height = 12
+                    for col_offset in range(1, 4):
+                        data = Reference(ws,
+                                         min_col=temp_chart_col + col_offset,
+                                         min_row=chart_anchor_row,
+                                         max_row=data_end_row)
+                        lc.add_data(data, titles_from_data=True)
+                    cats = Reference(ws,
+                                     min_col=temp_chart_col,
+                                     min_row=chart_anchor_row + 1,
+                                     max_row=data_end_row)
+                    lc.set_categories(cats)
+                    ws.add_chart(lc, f'D{chart_anchor_row}')
+            except Exception:
+                pass
+
+            # 차트2: 연강수량 막대 + 월평균강수량 꺾은선 콤보
+            try:
+                if 'precipitation' in sdf.columns:
+                    precip_chart_col = total_width + 7
+                    ws.cell(row=chart_anchor_row, column=precip_chart_col, value='연도')
+                    ws.cell(row=chart_anchor_row, column=precip_chart_col + 1, value='연강수량')
+                    ws.cell(row=chart_anchor_row, column=precip_chart_col + 2, value='월평균강수량')
+
+                    for yi, yr in enumerate(years):
+                        row_idx = chart_anchor_row + 1 + yi
+                        ydf = sdf[sdf['year'] == yr]
+                        ws.cell(row=row_idx, column=precip_chart_col, value=yr)
+                        total_p = _safe_val(ydf['precipitation'].sum() if not ydf.empty else None)
+                        total_p_val = round(float(total_p), 1) if total_p is not None else None
+                        monthly_p = round(float(total_p) / 12, 1) if total_p is not None else None
+                        ws.cell(row=row_idx, column=precip_chart_col + 1, value=total_p_val)
+                        ws.cell(row=row_idx, column=precip_chart_col + 2, value=monthly_p)
+
+                    data2_end_row = chart_anchor_row + len(years)
+
+                    bc2 = BarChart()
+                    bc2.title = '연도별 강수량'
+                    bc2.style = 10
+                    bc2.y_axis.title = '연강수량(mm)'
+                    bc2.x_axis.title = '연도'
+                    bc2.width = 20
+                    bc2.height = 12
+                    bar_data = Reference(ws,
+                                         min_col=precip_chart_col + 1,
+                                         min_row=chart_anchor_row,
+                                         max_row=data2_end_row)
+                    bc2.add_data(bar_data, titles_from_data=True)
+
+                    lc2 = LineChart()
+                    lc2.y_axis.axId = 200
+                    lc2.y_axis.title = '월평균강수량(mm)'
+                    line_data = Reference(ws,
+                                          min_col=precip_chart_col + 2,
+                                          min_row=chart_anchor_row,
+                                          max_row=data2_end_row)
+                    lc2.add_data(line_data, titles_from_data=True)
+                    bc2 += lc2
+
+                    cats2 = Reference(ws,
+                                      min_col=precip_chart_col,
+                                      min_row=chart_anchor_row + 1,
+                                      max_row=data2_end_row)
+                    bc2.set_categories(cats2)
+                    ws.add_chart(bc2, f'D{chart_anchor_row + 22}')
+            except Exception:
+                pass
+
+            r = chart_anchor_row + 50  # 다음 관측소 블록을 위한 여백
+
+    # ──────────────────────────────────
+    # 10. 기후통계 시트 (표 2-2)
+    # ──────────────────────────────────
+
+    def _sheet_climate_monthly(self, wb, df):
+        ws = wb.create_sheet("📊 기후통계")
+        ws.sheet_view.showGridLines = False
+
+        stations = df['station_name'].unique() if self._has_stn else ['전체']
+        years = sorted(df['year'].dropna().unique().astype(int).tolist())
+
+        yr_min = years[0] if years else '-'
+        yr_max = years[-1] if years else '-'
+
+        ws.column_dimensions['A'].width = 18
+        ws.column_dimensions['B'].width = 12
+        for ci in range(3, 15):
+            ws.column_dimensions[get_column_letter(ci)].width = 8
+        ws.column_dimensions['O'].width = 12
+
+        total_width = 15
+
+        r = 1
+        _title(ws, r, 1, total_width, '기후통계', h=28, sz=14)
+        r += 1
+
+        for stn in stations:
+            sdf = df[df['station_name'] == stn].copy() if self._has_stn else df.copy()
+
+            if self._has_stn:
+                _title(ws, r, 1, total_width,
+                       f'▶ {stn} 관측소', h=22, bg=C['mid_blue'], sz=11)
+                r += 1
+
+            _title(ws, r, 1, total_width,
+                   '표 2-2. 월별 기후통계', h=20, bg=C['mid_blue'], sz=10)
+            r += 1
+
+            _hc(ws, r, 1, '구분', bg=C['dark_blue'])
+            _hc(ws, r, 2, '소구분', bg=C['dark_blue'])
+            for mi, m in enumerate(range(1, 13), 3):
+                _hc(ws, r, mi, f'{m}월', bg=C['dark_blue'])
+            _hc(ws, r, 15, '평균/합계', bg=C['dark_blue'])
+            r += 1
+
+            def _monthly_vals(col_key, agg='mean'):
+                result = {}
+                if col_key not in sdf.columns:
+                    return result
+                for m in range(1, 13):
+                    mdf = sdf[sdf['month'] == m]
+                    if mdf.empty:
+                        result[m] = None
+                        continue
+                    if agg == 'mean':
+                        v = mdf[col_key].mean()
+                    elif agg == 'max':
+                        v = mdf[col_key].max()
+                    elif agg == 'min':
+                        v = mdf[col_key].min()
+                    elif agg == 'sum':
+                        v = mdf[col_key].sum()
+                    else:
+                        v = None
+                    v = _safe_val(v)
+                    result[m] = round(float(v), 1) if v is not None else None
+                return result
+
+            # 기온 블록
+            temp_defs = [
+                ('temp_avg', '평균',    'mean', '평균'),
+                ('temp_max', '평균최고', 'mean', '평균'),
+                ('temp_max', '최고극값', 'max',  '최대'),
+                ('temp_min', '평균최저', 'mean', '평균'),
+                ('temp_min', '최저극값', 'min',  '최소'),
+            ]
+            avail_temp = [(ck, sl, ag, ft) for ck, sl, ag, ft in temp_defs
+                          if ck in sdf.columns]
+
+            if avail_temp:
+                bg = C['light_blue']
+                merge_end = r + len(avail_temp) - 1
+                ws.merge_cells(start_row=r, start_column=1, end_row=merge_end, end_column=1)
+                c = ws.cell(row=r, column=1, value='기온(℃)')
+                c.font = Font(name=FONT, bold=True, size=9, color='000000')
+                c.fill = PatternFill(start_color=bg, end_color=bg, fill_type='solid')
+                c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                c.border = _thin()
+                for merge_r in range(r + 1, merge_end + 1):
+                    ws.cell(row=merge_r, column=1).border = _thin()
+                    ws.cell(row=merge_r, column=1).fill = PatternFill(
+                        start_color=bg, end_color=bg, fill_type='solid')
+
+                for col_key, sub_label, agg, final_type in avail_temp:
+                    monthly = _monthly_vals(col_key, agg)
+                    valid = [v for v in monthly.values() if v is not None]
+                    if final_type == '평균':
+                        last_val = round(sum(valid) / len(valid), 1) if valid else None
+                    elif final_type == '최대':
+                        last_val = round(max(valid), 1) if valid else None
+                    else:
+                        last_val = round(min(valid), 1) if valid else None
+                    _dc(ws, r, 2, sub_label, bg=bg)
+                    for mi, m in enumerate(range(1, 13), 3):
+                        _dc(ws, r, mi, monthly.get(m), bg=bg, nf='0.0')
+                    _dc(ws, r, 15, last_val, bg=bg, bold=True, nf='0.0')
+                    r += 1
+
+            # 강수량 블록
+            precip_defs = [
+                ('precipitation', '평균', 'mean', '#,##0.0'),
+                ('precipitation', '최대', 'max',  '#,##0.0'),
+                ('precipitation', '최소', 'min',  '#,##0.0'),
+            ]
+            avail_precip = [(ck, sl, ag, nf) for ck, sl, ag, nf in precip_defs
+                            if ck in sdf.columns]
+
+            if avail_precip:
+                bg = C['light_green']
+                merge_end = r + len(avail_precip) - 1
+                ws.merge_cells(start_row=r, start_column=1, end_row=merge_end, end_column=1)
+                c = ws.cell(row=r, column=1, value='강수량(mm)')
+                c.font = Font(name=FONT, bold=True, size=9, color='000000')
+                c.fill = PatternFill(start_color=bg, end_color=bg, fill_type='solid')
+                c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                c.border = _thin()
+                for merge_r in range(r + 1, merge_end + 1):
+                    ws.cell(row=merge_r, column=1).border = _thin()
+                    ws.cell(row=merge_r, column=1).fill = PatternFill(
+                        start_color=bg, end_color=bg, fill_type='solid')
+
+                for col_key, sub_label, agg, nf in avail_precip:
+                    monthly = _monthly_vals(col_key, agg)
+                    valid = [v for v in monthly.values() if v is not None]
+                    if sub_label == '평균':
+                        yr_totals = []
+                        for yr in years:
+                            ydf = sdf[sdf['year'] == yr]
+                            v = _safe_val(ydf['precipitation'].sum() if not ydf.empty else None)
+                            if v is not None:
+                                yr_totals.append(float(v))
+                        last_val = round(sum(yr_totals) / len(yr_totals), 1) if yr_totals else None
+                    elif sub_label == '최대':
+                        last_val = round(max(valid), 1) if valid else None
+                    else:
+                        last_val = round(min(valid), 1) if valid else None
+                    _dc(ws, r, 2, sub_label, bg=bg)
+                    for mi, m in enumerate(range(1, 13), 3):
+                        _dc(ws, r, mi, monthly.get(m), bg=bg, nf=nf)
+                    _dc(ws, r, 15, last_val, bg=bg, bold=True, nf=nf)
+                    r += 1
+
+            # 상대습도 블록
+            if 'humidity_min' in sdf.columns:
+                hum_defs = [('humidity', '평균', 'mean'), ('humidity_min', '최소', 'min')]
+            elif 'humidity' in sdf.columns:
+                hum_defs = [('humidity', '평균', 'mean'), ('humidity', '최소', 'min')]
+            else:
+                hum_defs = []
+            avail_hum = [(ck, sl, ag) for ck, sl, ag in hum_defs if ck in sdf.columns]
+
+            if avail_hum:
+                bg = C['light_yellow']
+                merge_end = r + len(avail_hum) - 1
+                ws.merge_cells(start_row=r, start_column=1, end_row=merge_end, end_column=1)
+                c = ws.cell(row=r, column=1, value='상대습도(%)')
+                c.font = Font(name=FONT, bold=True, size=9, color='000000')
+                c.fill = PatternFill(start_color=bg, end_color=bg, fill_type='solid')
+                c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                c.border = _thin()
+                for merge_r in range(r + 1, merge_end + 1):
+                    ws.cell(row=merge_r, column=1).border = _thin()
+                    ws.cell(row=merge_r, column=1).fill = PatternFill(
+                        start_color=bg, end_color=bg, fill_type='solid')
+
+                for col_key, sub_label, agg in avail_hum:
+                    monthly = _monthly_vals(col_key, agg)
+                    valid = [v for v in monthly.values() if v is not None]
+                    last_val = round(sum(valid) / len(valid), 1) if valid else None
+                    _dc(ws, r, 2, sub_label, bg=bg)
+                    for mi, m in enumerate(range(1, 13), 3):
+                        _dc(ws, r, mi, monthly.get(m), bg=bg, nf='0.0')
+                    _dc(ws, r, 15, last_val, bg=bg, bold=True, nf='0.0')
+                    r += 1
+
+            # 일조시간 블록
+            if 'sunshine' in sdf.columns:
+                bg = C['white']
+                ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+                c = ws.cell(row=r, column=1, value='일조시간(hr)')
+                c.font = Font(name=FONT, bold=True, size=9, color='000000')
+                c.fill = PatternFill(start_color=bg, end_color=bg, fill_type='solid')
+                c.alignment = Alignment(horizontal='center', vertical='center')
+                c.border = _thin()
+                ws.cell(row=r, column=2).border = _thin()
+                ws.cell(row=r, column=2).fill = PatternFill(
+                    start_color=bg, end_color=bg, fill_type='solid')
+                monthly = _monthly_vals('sunshine', 'mean')
+                valid = [v for v in monthly.values() if v is not None]
+                annual_total = round(sum(valid), 1) if valid else None
+                for mi, m in enumerate(range(1, 13), 3):
+                    _dc(ws, r, mi, monthly.get(m), bg=bg, nf='#,##0.0')
+                _dc(ws, r, 15, annual_total, bg=bg, bold=True, nf='#,##0.0')
+                r += 1
+
+            # 바람 블록
+            wind_max_col = ('wind_gust' if 'wind_gust' in sdf.columns
+                            else ('wind_max' if 'wind_max' in sdf.columns else None))
+            wind_defs = [('wind_speed', '평균풍속', 'mean')]
+            if wind_max_col:
+                wind_defs.append((wind_max_col, '최대풍속', 'max'))
+            avail_wind = [(ck, sl, ag) for ck, sl, ag in wind_defs if ck in sdf.columns]
+
+            if avail_wind:
+                bg = C['light_gray']
+                merge_end = r + len(avail_wind) - 1
+                ws.merge_cells(start_row=r, start_column=1, end_row=merge_end, end_column=1)
+                c = ws.cell(row=r, column=1, value='바람(m/s)')
+                c.font = Font(name=FONT, bold=True, size=9, color='000000')
+                c.fill = PatternFill(start_color=bg, end_color=bg, fill_type='solid')
+                c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                c.border = _thin()
+                for merge_r in range(r + 1, merge_end + 1):
+                    ws.cell(row=merge_r, column=1).border = _thin()
+                    ws.cell(row=merge_r, column=1).fill = PatternFill(
+                        start_color=bg, end_color=bg, fill_type='solid')
+
+                for col_key, sub_label, agg in avail_wind:
+                    monthly = _monthly_vals(col_key, agg)
+                    valid = [v for v in monthly.values() if v is not None]
+                    if agg == 'mean':
+                        last_val = round(sum(valid) / len(valid), 1) if valid else None
+                    else:
+                        last_val = round(max(valid), 1) if valid else None
+                    _dc(ws, r, 2, sub_label, bg=bg)
+                    for mi, m in enumerate(range(1, 13), 3):
+                        _dc(ws, r, mi, monthly.get(m), bg=bg, nf='0.0')
+                    _dc(ws, r, 15, last_val, bg=bg, bold=True, nf='0.0')
+                    r += 1
+
+            r += 1
+            _note(ws, r, 1, total_width,
+                  f'※ 자료 : 기상자료개방포털({yr_min}~{yr_max})')
+            r += 3
