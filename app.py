@@ -43,14 +43,21 @@ st.set_page_config(
 # 글씨 크기 확대 (시니어 연구자용)
 st.markdown("""
 <style>
-/* ── 탭 메뉴 글씨 (Streamlit 버전별 선택자 모두 적용) ── */
-.stTabs [data-baseweb="tab"],
-.stTabs button[role="tab"],
-div[data-testid="stTabs"] button,
-button[data-baseweb="tab"] {
+/* ── 탭 메뉴 글씨: 버튼 자체 + 내부 p 태그 모두 지정 ── */
+[data-baseweb="tab"],
+[data-testid="stTab"],
+.stTabs button[role="tab"] {
     font-size: 22px !important;
     font-weight: 600;
     padding: 10px 22px !important;
+}
+/* 실제 텍스트가 담긴 p 태그를 직접 타겟 */
+[data-baseweb="tab"] p,
+[data-testid="stTab"] p,
+[data-testid="stTab"] [data-testid="stMarkdownContainer"] p {
+    font-size: 22px !important;
+    font-weight: 600;
+    line-height: 1.3;
 }
 .stTabs [data-baseweb="tab-list"],
 div[data-testid="stTabs"] [role="tablist"] {
