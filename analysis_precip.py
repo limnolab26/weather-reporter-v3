@@ -409,9 +409,15 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
 
     monthly = sdf.groupby(["year", "month"])["precipitation"].sum().reset_index()
     pivot = monthly.pivot(index="month", columns="year", values="precipitation").round(1)
-    pivot.index.name = "월"
 
-    # 행합계(연합계), 열합계(월합계) 추가
+    # 인덱스를 문자열로 변환 (숫자+문자 혼합 방지 → Arrow 직렬화 오류 방지)
+    pivot.index = [f"{m}월" for m in pivot.index]
+    pivot.index.name = "월"
+    # 컬럼도 문자열로
+    pivot.columns = [str(c) for c in pivot.columns]
+    pivot.columns.name = "연도"
+
+    # 합계·평균 행/열 추가
     pivot.loc["합계"] = pivot.sum()
     pivot["월평균"] = pivot.iloc[:-1].mean(axis=1).round(1)
     pivot.loc["합계", "월평균"] = float("nan")
@@ -509,13 +515,29 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
     fig.update_layout(height=400)
     st.plotly_chart(fig, use_container_width=True)
 
-    # 연강수량 vs 기간강수량 산점도
+    # 연강수량 vs 기간강수량 산점도 (numpy 추세선, statsmodels 불필요)
     fig2 = px.scatter(
         show_df, x="연강수량", y="기간강수량",
-        color="관측소", trendline="ols",
+        color="관측소",
         labels={"연강수량": "연강수량 (mm)", "기간강수량": f"{selected_period} 강수량 (mm)"},
         title=f"연강수량 vs {selected_period} 강수량"
     )
+    # 관측소별 numpy polyfit 추세선 추가
+    colors_list = px.colors.qualitative.Set2
+    for i, (stn_name, grp) in enumerate(show_df.groupby("관측소")):
+        x_arr = grp["연강수량"].values.astype(float)
+        y_arr = grp["기간강수량"].values.astype(float)
+        mask = ~(np.isnan(x_arr) | np.isnan(y_arr))
+        if mask.sum() >= 2:
+            coeffs = np.polyfit(x_arr[mask], y_arr[mask], 1)
+            x_line = np.linspace(x_arr[mask].min(), x_arr[mask].max(), 50)
+            y_line = np.polyval(coeffs, x_line)
+            fig2.add_trace(go.Scatter(
+                x=x_line, y=y_line, mode="lines",
+                name=f"{stn_name} 추세",
+                line=dict(color=colors_list[i % len(colors_list)], dash="dash", width=1.5),
+                showlegend=False,
+            ))
     fig2.update_layout(height=380)
     st.plotly_chart(fig2, use_container_width=True)
 
