@@ -344,7 +344,10 @@ def _render_climate_reference(df: pd.DataFrame) -> None:
         "station_name": "관측소",
     }
     monthly = monthly.rename(columns=col_rename)
-    st.dataframe(monthly, use_container_width=True, hide_index=True)
+    # 12월까지 스크롤 없이 한 번에 보이도록 충분한 높이 설정
+    row_count = len(monthly)
+    table_height = min(max(row_count * 38 + 60, 520), 900)
+    st.dataframe(monthly, use_container_width=True, hide_index=True, height=table_height)
 
 
 def render(df: pd.DataFrame) -> None:

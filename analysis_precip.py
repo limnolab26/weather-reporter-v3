@@ -437,7 +437,7 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
 
 
 def _tab_summer_concentration(df: pd.DataFrame) -> None:
-    """여름 강수 집중도 분석 (6~8월 / 연강수량)"""
+    """여름 강수 집중도 분석 (7+8, 6+7+8, 7+8+9 세 기간)"""
     st.markdown("### ☔ 여름철 강수 집중도 분석")
 
     if not _has_col(df, "precipitation", "year", "month", "station_name"):
@@ -447,52 +447,80 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
     annual = df.groupby(["station_name", "year"])["precipitation"].sum().reset_index()
     annual.columns = ["관측소", "연도", "연강수량"]
 
-    summer = (
-        df[df["month"].isin([6, 7, 8])]
-        .groupby(["station_name", "year"])["precipitation"]
-        .sum()
-        .reset_index()
+    # 세 가지 여름 기간 정의
+    periods = {
+        "7+8월 (성하기)":    [7, 8],
+        "6+7+8월 (초여름~성하)": [6, 7, 8],
+        "7+8+9월 (한여름~초가을)": [7, 8, 9],
+    }
+
+    all_merged = []
+    for period_name, months in periods.items():
+        sub = (
+            df[df["month"].isin(months)]
+            .groupby(["station_name", "year"])["precipitation"]
+            .sum()
+            .reset_index()
+        )
+        sub.columns = ["관측소", "연도", "기간강수량"]
+        merged = pd.merge(annual, sub, on=["관측소", "연도"])
+        merged["기간"] = period_name
+        merged["집중도(%)"] = (merged["기간강수량"] / merged["연강수량"] * 100).round(1)
+        all_merged.append(merged)
+
+    all_df = pd.concat(all_merged, ignore_index=True)
+
+    # 기간 선택
+    selected_period = st.selectbox(
+        "분석 기간",
+        list(periods.keys()),
+        key="summer_conc_period"
     )
-    summer.columns = ["관측소", "연도", "여름강수량"]
+    show_df = all_df[all_df["기간"] == selected_period]
 
-    merged = pd.merge(annual, summer, on=["관측소", "연도"])
-    merged["여름집중도(%)"] = (merged["여름강수량"] / merged["연강수량"] * 100).round(1)
-
-    # 관측소별 평균
-    summary = merged.groupby("관측소").agg(
+    # 요약 통계
+    st.markdown(f"#### 관측소별 {selected_period} 강수 집중도 요약")
+    summary = show_df.groupby("관측소").agg(
         연평균강수량=("연강수량", "mean"),
-        여름평균강수량=("여름강수량", "mean"),
-        평균집중도=("여름집중도(%)", "mean"),
-        최대집중도=("여름집중도(%)", "max"),
-        최소집중도=("여름집중도(%)", "min"),
+        기간평균강수량=("기간강수량", "mean"),
+        평균집중도=("집중도(%)", "mean"),
+        최대집중도=("집중도(%)", "max"),
+        최소집중도=("집중도(%)", "min"),
     ).round(1)
-    st.markdown("#### 관측소별 여름(6~8월) 강수 집중도 요약")
     st.dataframe(summary, use_container_width=True)
+
+    # 세 기간 동시 비교표
+    st.markdown("#### 기간별 연평균 집중도 비교")
+    compare = all_df.groupby(["관측소", "기간"])["집중도(%)"].mean().round(1).unstack("기간")
+    st.dataframe(compare, use_container_width=True)
 
     # 연도별 집중도 추이
     fig = px.line(
-        merged, x="연도", y="여름집중도(%)",
+        show_df, x="연도", y="집중도(%)",
         color="관측소", markers=True,
-        labels={"연도": "연도", "여름집중도(%)": "집중도 (%)"},
-        title="연도별 여름(6~8월) 강수 집중도"
+        labels={"연도": "연도", "집중도(%)": "집중도 (%)"},
+        title=f"연도별 {selected_period} 강수 집중도"
     )
     fig.add_hline(
-        y=merged["여름집중도(%)"].mean(),
+        y=show_df["집중도(%)"].mean(),
         line_dash="dash", line_color="gray",
-        annotation_text=f"전체평균 {merged['여름집중도(%)'].mean():.1f}%"
+        annotation_text=f"전체평균 {show_df['집중도(%)'].mean():.1f}%"
     )
     fig.update_layout(height=400)
     st.plotly_chart(fig, use_container_width=True)
 
-    # 연강수량 vs 여름강수량 산점도
+    # 연강수량 vs 기간강수량 산점도
     fig2 = px.scatter(
-        merged, x="연강수량", y="여름강수량",
+        show_df, x="연강수량", y="기간강수량",
         color="관측소", trendline="ols",
-        labels={"연강수량": "연강수량 (mm)", "여름강수량": "여름강수량 (mm)"},
-        title="연강수량 vs 여름강수량"
+        labels={"연강수량": "연강수량 (mm)", "기간강수량": f"{selected_period} 강수량 (mm)"},
+        title=f"연강수량 vs {selected_period} 강수량"
     )
     fig2.update_layout(height=380)
     st.plotly_chart(fig2, use_container_width=True)
+
+    csv = show_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", csv, "여름강수집중도.csv", "text/csv", key="summer_conc_csv")
 
 
 def _tab_rain_days(df: pd.DataFrame) -> None:
@@ -506,7 +534,8 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
     records = []
     for stn, sdf in df.groupby("station_name"):
         for year, ydf in sdf.groupby("year"):
-            ydf = ydf.sort_values("date")
+            if "date" in ydf.columns:
+                ydf = ydf.sort_values("date")
             p = ydf["precipitation"].fillna(0)
 
             rain_days = int((p > 0).sum())
@@ -514,27 +543,27 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
             total_days = len(p)
 
             # 강우 강도별
-            d_lt3 = int(((p > 0) & (p < 3)).sum())
-            d_3_10 = int(((p >= 3) & (p < 10)).sum())
+            d_lt3   = int(((p > 0) & (p < 3)).sum())
+            d_3_10  = int(((p >= 3)  & (p < 10)).sum())
             d_10_30 = int(((p >= 10) & (p < 30)).sum())
             d_30_80 = int(((p >= 30) & (p < 80)).sum())
-            d_ge80 = int((p >= 80).sum())
+            d_ge80  = int((p >= 80).sum())
 
             # 최장 연속 강우일
-            is_rain = (p > 0).astype(int)
+            is_rain = (p > 0).astype(int).reset_index(drop=True)
             groups = (is_rain != is_rain.shift()).cumsum()
             consec_rain = is_rain.groupby(groups).sum()
             max_consec_rain = int(consec_rain[consec_rain > 0].max()) if rain_days > 0 else 0
 
             # 최장 연속 무강우일
-            is_dry = (p == 0).astype(int)
+            is_dry = (p == 0).astype(int).reset_index(drop=True)
             groups2 = (is_dry != is_dry.shift()).cumsum()
             consec_dry = is_dry.groupby(groups2).sum()
             max_consec_dry = int(consec_dry[consec_dry > 0].max()) if dry_days > 0 else 0
 
             records.append({
                 "관측소": stn, "연도": int(year),
-                "강우일수": rain_days, "무강우일": dry_days, "총일수": total_days,
+                "강우일수": rain_days, "무강우일수": dry_days, "총일수": total_days,
                 "<3mm": d_lt3, "3~10mm": d_3_10, "10~30mm": d_10_30,
                 "30~80mm": d_30_80, "≥80mm": d_ge80,
                 "최장연속강우(일)": max_consec_rain,
@@ -542,11 +571,39 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
             })
 
     tbl = pd.DataFrame(records)
-    st.dataframe(tbl, use_container_width=True, height=420)
+
+    st.markdown("#### 연도별 강우일수 통계표")
+    st.dataframe(tbl, use_container_width=True, height=440)
 
     csv = tbl.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", csv, "강우일수분석.csv", "text/csv", key="raindays_csv")
 
+    # ── 다중 관측소 추이 (라인차트) ──
+    st.markdown("#### 연도별 추이 (다중 관측소 비교)")
+    trend_metric = st.selectbox(
+        "추이 항목 선택",
+        ["강우일수", "무강우일수", "최장연속강우(일)", "최장연속무강우(일)"],
+        key="raindays_trend_metric"
+    )
+    fig_trend = px.line(
+        tbl, x="연도", y=trend_metric,
+        color="관측소", markers=True,
+        labels={"연도": "연도", trend_metric: f"{trend_metric}"},
+        title=f"연도별 {trend_metric} 추이"
+    )
+    # 관측소별 평균 기준선
+    for stn_name, sdf2 in tbl.groupby("관측소"):
+        avg = sdf2[trend_metric].mean()
+        fig_trend.add_hline(
+            y=avg, line_dash="dot", opacity=0.4,
+            annotation_text=f"{stn_name} 평균 {avg:.1f}일",
+            annotation_position="top right",
+        )
+    fig_trend.update_layout(height=420)
+    st.plotly_chart(fig_trend, use_container_width=True)
+
+    # ── 단일 관측소 상세 막대 ──
+    st.markdown("#### 관측소별 상세 분석")
     col1, col2 = st.columns(2)
     with col1:
         stations = tbl["관측소"].unique().tolist()
@@ -554,7 +611,7 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
     with col2:
         metric = st.selectbox(
             "표시 항목",
-            ["강우일수", "무강우일", "최장연속강우(일)", "최장연속무강우(일)"],
+            ["강우일수", "무강우일수", "최장연속강우(일)", "최장연속무강우(일)"],
             key="raindays_metric"
         )
 

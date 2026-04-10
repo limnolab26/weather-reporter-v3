@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
@@ -24,6 +25,12 @@ import analysis_wind
 import analysis_agri
 import analysis_climate
 
+# Plotly 전역 글씨 크기 설정 (모든 그래프에 적용)
+_base = pio.templates["plotly"]
+_base.layout.font = dict(size=14)
+_base.layout.title = dict(font=dict(size=16))
+pio.templates.default = "plotly"
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 페이지 설정
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -33,17 +40,33 @@ st.set_page_config(
     layout="wide"
 )
 
-# 탭 글씨 크기 확대 (시니어 연구자용)
+# 글씨 크기 확대 (시니어 연구자용)
 st.markdown("""
 <style>
+/* ── 탭 메뉴 글씨 ── */
 .stTabs [data-baseweb="tab"] {
-    font-size: 17px !important;
+    font-size: 19px !important;
     font-weight: 600;
-    padding: 8px 18px;
+    padding: 8px 20px;
 }
 .stTabs [data-baseweb="tab-list"] {
     gap: 4px;
     flex-wrap: wrap;
+}
+/* ── 사이드바 텍스트 ── */
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] .stMarkdown p,
+section[data-testid="stSidebar"] .stMarkdown span {
+    font-size: 15px !important;
+}
+/* ── 데이터프레임 표 글씨 ── */
+[data-testid="stDataFrame"] div[role="gridcell"],
+[data-testid="stDataFrame"] div[role="columnheader"] {
+    font-size: 14px !important;
+}
+/* ── 일반 본문 글씨 ── */
+.stMarkdown p, .stMarkdown li, .stText {
+    font-size: 15px !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -237,6 +260,10 @@ st.sidebar.link_button(
     "https://data.kma.go.kr/data/grnd/selectAsosRltmList.do?pgmNo=36"
 )
 
+st.sidebar.header("📆 평년기간 설정")
+climate_start = st.sidebar.number_input("평년 시작연도", min_value=1950, max_value=2100, value=1991)
+climate_end = st.sidebar.number_input("평년 종료연도", min_value=1950, max_value=2100, value=2020)
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("**🔗 관련 사이트**")
 st.sidebar.link_button("🌤️ 기상청 날씨누리", "https://www.weather.go.kr/w/index.do")
@@ -246,10 +273,6 @@ st.sidebar.link_button("🌾 농업가뭄관리시스템", "https://adms.ekr.or.
 st.sidebar.link_button("🌐 earth 전세계 기상지도", "https://earth.nullschool.net/ko/#current/particulates/surface/level/overlay=pm2.5/orthographic=-238.18,22.58,577")
 st.sidebar.link_button("⛰️ 산악기상정보시스템", "https://mtweather.nifos.go.kr/")
 st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/realSearch?pMENU_NO=97")
-
-st.sidebar.header("📆 평년기간 설정")
-climate_start = st.sidebar.number_input("평년 시작연도", min_value=1950, max_value=2100, value=1991)
-climate_end = st.sidebar.number_input("평년 종료연도", min_value=1950, max_value=2100, value=2020)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 데이터 로딩
