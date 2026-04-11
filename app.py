@@ -715,11 +715,22 @@ with tab_download:
                 try:
                     from excel_generator import ExcelReportGenerator
                     gen = ExcelReportGenerator()
+
+                    progress_bar = st.progress(0, text="Excel 보고서 생성 준비 중...")
+
+                    def _on_progress(value, msg):
+                        progress_bar.progress(
+                            min(value, 1.0),
+                            text=f"📊 {msg}" if msg else "생성 중...",
+                        )
+
                     excel_bytes = gen.generate_excel(
                         df=st.session_state.df,
                         monthly_df=st.session_state.monthly_df,
                         climate_df=st.session_state.climate_df,
+                        progress_callback=_on_progress,
                     )
+                    progress_bar.empty()
                     st.download_button(
                         "⬇️ Excel 다운로드", excel_bytes,
                         gen.generate_filename(),
