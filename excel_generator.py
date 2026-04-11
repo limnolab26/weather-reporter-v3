@@ -1995,7 +1995,7 @@ class ExcelReportGenerator:
     def _sheet_pivot_work(self, wb, df):
         from openpyxl.pivot.table import (
             TableDefinition, Location, PivotField,
-            DataField, RowColField, PageField, FieldItem,
+            DataField, RowColField,
         )
         from openpyxl.pivot.cache import (
             CacheDefinition, CacheSource, WorksheetSource,
@@ -2011,12 +2011,6 @@ class ExcelReportGenerator:
 
         total_rows = getattr(self, '_raw2_total_rows', 100000)
         item_labels = getattr(self, '_raw2_item_labels', list(ELEMENT_LABELS.values()))
-
-        precip_label = ELEMENT_LABELS.get('precipitation', '강수량(mm)')
-        try:
-            precip_idx = item_labels.index(precip_label)
-        except ValueError:
-            precip_idx = 0
 
         # 피벗 캐시 생성 (원본 데이터2 시트 기반)
         src = CacheSource(type='worksheet')
@@ -2051,15 +2045,15 @@ class ExcelReportGenerator:
             cacheSource=src, cacheFields=cache_fields, refreshOnLoad=True)
         self._raw2_cache = cache
 
-        # 피벗 테이블 정의: 연도(행) × 월(열), 강수량 합계
+        # 피벗 테이블 정의: 연도(행) × 월(열), Data 합계
+        # ※ 항목 필터는 Excel에서 필드 목록 창을 통해 직접 설정
         loc = Location(ref='A3', firstHeaderRow=1, firstDataRow=1, firstDataCol=1)
         pivot_fields = [
             PivotField(axis=None),            # 날짜(0)
             PivotField(axis='axisRow'),       # 연도(1) → 행
             PivotField(axis='axisCol'),       # 월(2)  → 열
             PivotField(axis=None),            # 관측소명(3)
-            PivotField(axis='axisPage',       # 항목(4) → 페이지 필터
-                       items=[FieldItem(t='data', x=precip_idx)]),
+            PivotField(axis=None),            # 항목(4) → 필드 목록에서 필터 설정
             PivotField(axis='axisValues'),    # Data(5) → 값
         ]
         pivot = TableDefinition(
@@ -2070,8 +2064,7 @@ class ExcelReportGenerator:
             pivotFields=pivot_fields,
             rowFields=[RowColField(x=1)],
             colFields=[RowColField(x=2)],
-            pageFields=[PageField(fld=4, item=precip_idx)],
-            dataFields=[DataField(name='합계:강수량(mm)', fld=5, subtotal='sum')],
+            dataFields=[DataField(name='합계:Data', fld=5, subtotal='sum')],
             rowGrandTotals=True,
             colGrandTotals=True,
         )
