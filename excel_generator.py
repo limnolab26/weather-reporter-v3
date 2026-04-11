@@ -1,6 +1,7 @@
 # excel_generator.py — 엑셀 보고서 생성 모듈 (v5.0)
 
 import io
+import io as _io
 from datetime import datetime
 
 import numpy as np
@@ -11,6 +12,7 @@ from openpyxl.chart import BarChart, LineChart, Reference
 from openpyxl.chart.marker import Marker
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.drawing.image import Image as XLImage
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 색상 팔레트 상수
@@ -212,6 +214,22 @@ class ExcelReportGenerator:
         self._sheet_pivot(wb, df2)
         self._sheet_weather_overview(wb, df2)
         self._sheet_climate_monthly(wb, df2)
+        try:
+            self._sheet_raw2(wb, df2)
+        except Exception:
+            pass
+        try:
+            self._sheet_pivot_work(wb, df2)
+        except Exception:
+            pass
+        try:
+            self._sheet_pivot_work2(wb, df2)
+        except Exception:
+            pass
+        try:
+            self._sheet_boxplot(wb, df2)
+        except Exception:
+            pass
 
         output = io.BytesIO()
         wb.save(output)
@@ -1919,3 +1937,415 @@ class ExcelReportGenerator:
             _note(ws, r, 1, total_width,
                   f'※ 자료 : 기상자료개방포털({yr_min}~{yr_max})')
             r += 3
+
+    # ──────────────────────────────────
+    # 추가 시트 1: 원본 데이터2 (세로형 Long Format)
+    # ──────────────────────────────────
+
+    def _sheet_raw2(self, wb, df):
+        ws = wb.create_sheet("원본 데이터2")
+        ws.freeze_panes = 'A2'
+
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 7
+        ws.column_dimensions['C'].width = 5
+        ws.column_dimensions['D'].width = 12
+        ws.column_dimensions['E'].width = 20
+        ws.column_dimensions['F'].width = 12
+
+        headers = ['날짜', '연도', '월', '관측소명', '항목', 'Data']
+        for ci, h in enumerate(headers, 1):
+            _hc(ws, 1, ci, h, sz=9, bg=C['dark_blue'])
+
+        elem_cols = [(k, lbl) for k, lbl in ELEMENT_LABELS.items() if k in df.columns]
+
+        row_r = 2
+        for _, rec in df.iterrows():
+            date_val = rec.get('date', None)
+            if date_val is not None and pd.notna(date_val):
+                date_val = pd.to_datetime(date_val).to_pydatetime()
+            else:
+                date_val = None
+            year_val = rec.get('year', None)
+            month_val = rec.get('month', None)
+            stn_val = rec.get('station_name', '')
+            for col_key, label in elem_cols:
+                raw_val = rec.get(col_key, None)
+                val = _safe_val(raw_val)
+                c_date = ws.cell(row=row_r, column=1, value=date_val)
+                c_date.number_format = 'YYYY-MM-DD'
+                ws.cell(row=row_r, column=2, value=year_val)
+                ws.cell(row=row_r, column=3, value=month_val)
+                ws.cell(row=row_r, column=4, value=stn_val)
+                ws.cell(row=row_r, column=5, value=label)
+                ws.cell(row=row_r, column=6, value=val)
+                row_r += 1
+
+        ws.auto_filter.ref = f"A1:F{max(row_r - 1, 1)}"
+
+    # ──────────────────────────────────
+    # 추가 시트 2: 피벗작업 (연도×월 강수량 합계)
+    # ──────────────────────────────────
+
+    def _sheet_pivot_work(self, wb, df):
+        ws = wb.create_sheet("피벗작업")
+        ws.freeze_panes = 'B5'
+        ws.sheet_view.showGridLines = True
+
+        ws.column_dimensions['A'].width = 12
+        for ci in range(2, 15):
+            ws.column_dimensions[get_column_letter(ci)].width = 9
+
+        # 타이틀 행
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=14)
+        c = ws.cell(row=1, column=1,
+                    value="피벗 테이블  —  아래 피벗 테이블을 클릭하면 필드 목록이 표시됩니다.")
+        c.font = Font(name=FONT, bold=True, size=11, color=C['white'])
+        c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
+        c.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+        ws.row_dimensions[1].height = 22
+
+        # 주석 행
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=14)
+        c2 = ws.cell(row=2, column=1,
+                     value="※ Excel 피벗 테이블  |  소스: 원본 데이터(기상데이터 Table)  |  필드를 드래그해 자유롭게 분석하세요.")
+        c2.font = Font(name=FONT, size=8, color=C['gray'])
+        c2.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+        ws.row_dimensions[2].height = 13
+
+        if 'precipitation' not in df.columns:
+            ws.cell(row=4, column=1, value="강수량 데이터 없음")
+            return
+
+        # Row 3
+        ws.cell(row=3, column=1, value="합계 : 강수량(mm)").font = Font(name=FONT, bold=True, size=9)
+        ws.cell(row=3, column=2, value="열 레이블").font = Font(name=FONT, size=9, color=C['gray'])
+
+        # Row 4: 헤더
+        _hc(ws, 4, 1, '행 레이블', sz=9, bg=C['dark_blue'])
+        for m in range(1, 13):
+            _hc(ws, 4, m + 1, m, sz=9, bg=C['dark_blue'])
+        _hc(ws, 4, 14, '총합계', sz=9, bg=C['dark_blue'])
+        ws.auto_filter.ref = "A4:N4"
+
+        # 피벗 계산
+        pivot = (df.groupby(['year', 'month'])['precipitation']
+                 .sum()
+                 .unstack('month')
+                 .reindex(columns=range(1, 13)))
+        pivot = pivot.sort_index()
+
+        data_rows = []
+        for year, row_s in pivot.iterrows():
+            row_vals = [_safe_val(row_s.get(m)) for m in range(1, 13)]
+            valid = [v for v in row_vals if v is not None]
+            total = round(sum(valid), 1) if valid else None
+            data_rows.append((int(year), row_vals, total))
+
+        ri = 5
+        for year, row_vals, total in data_rows:
+            _dc(ws, ri, 1, year, bg=C['light_blue'], bold=True, nf='0')
+            for ci, v in enumerate(row_vals, 2):
+                _dc(ws, ri, ci, v, bg=C['light_blue'], nf='#,##0.0')
+            _dc(ws, ri, 14, total, bg=C['light_blue'], bold=True, nf='#,##0.0')
+            ri += 1
+
+        # 총합계 행
+        all_vals = [v for _, row_vals, _ in data_rows for v in row_vals if v is not None]
+        _dc(ws, ri, 1, '총합계', bg=C['dark_blue'], bold=True)
+        ws.cell(row=ri, column=1).font = Font(name=FONT, bold=True, size=9, color=C['white'])
+        ws.cell(row=ri, column=1).fill = PatternFill(
+            start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
+        for m in range(1, 13):
+            col_vals = [row_vals[m - 1] for _, row_vals, _ in data_rows
+                        if row_vals[m - 1] is not None]
+            col_total = round(sum(col_vals), 1) if col_vals else None
+            c = ws.cell(row=ri, column=m + 1, value=col_total)
+            c.font = Font(name=FONT, bold=True, size=9, color=C['white'])
+            c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
+            c.alignment = Alignment(horizontal='center', vertical='center')
+            c.number_format = '#,##0.0'
+        grand_total = round(sum(v for v in all_vals), 1) if all_vals else None
+        c = ws.cell(row=ri, column=14, value=grand_total)
+        c.font = Font(name=FONT, bold=True, size=9, color=C['white'])
+        c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
+        c.alignment = Alignment(horizontal='center', vertical='center')
+        c.number_format = '#,##0.0'
+
+    # ──────────────────────────────────
+    # 추가 시트 3: 피벗작업2 (날짜×월 전체 Data 합계)
+    # ──────────────────────────────────
+
+    def _sheet_pivot_work2(self, wb, df):
+        ws = wb.create_sheet("피벗작업2")
+        ws.freeze_panes = 'B5'
+        ws.sheet_view.showGridLines = True
+
+        ws.column_dimensions['A'].width = 13
+        for ci in range(2, 15):
+            ws.column_dimensions[get_column_letter(ci)].width = 9
+
+        # 타이틀 행
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=14)
+        c = ws.cell(row=1, column=1,
+                    value="원본 데이터2(세로형) 기반 피벗테이블 — 클릭하면 필드 목록이 표시됩니다.")
+        c.font = Font(name=FONT, bold=True, size=11, color=C['white'])
+        c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
+        c.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+        ws.row_dimensions[1].height = 22
+
+        # 주석 행
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=14)
+        c2 = ws.cell(row=2, column=1,
+                     value="※ 날짜·연도·월·관측소명·항목·Data 필드를 드래그해 자유롭게 분석하세요.")
+        c2.font = Font(name=FONT, size=8, color=C['gray'])
+        c2.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+        ws.row_dimensions[2].height = 13
+
+        # Row 3
+        ws.cell(row=3, column=1, value="합계 : Data").font = Font(name=FONT, bold=True, size=9)
+        ws.cell(row=3, column=2, value="열 레이블").font = Font(name=FONT, size=9, color=C['gray'])
+
+        # Row 4: 헤더
+        _hc(ws, 4, 1, '행 레이블', sz=9, bg=C['dark_blue'])
+        for m in range(1, 13):
+            _hc(ws, 4, m + 1, m, sz=9, bg=C['dark_blue'])
+        _hc(ws, 4, 14, '총합계', sz=9, bg=C['dark_blue'])
+        ws.auto_filter.ref = "A4:N4"
+
+        num_cols = [k for k in ELEMENT_LABELS if k in df.columns]
+        if not num_cols:
+            ws.cell(row=5, column=1, value="수치 데이터 없음")
+            return
+
+        df_work = df[['date', 'year', 'month'] + num_cols].copy()
+        df_work['_total'] = df_work[num_cols].sum(axis=1, skipna=True)
+        df_work = df_work.sort_values('date').reset_index(drop=True)
+
+        ri = 5
+        for _, row_s in df_work.iterrows():
+            date_val = row_s.get('date', None)
+            if date_val is not None and pd.notna(date_val):
+                date_val = pd.to_datetime(date_val).to_pydatetime()
+            else:
+                date_val = None
+            month_val = int(row_s['month']) if pd.notna(row_s.get('month')) else None
+            total_val = _safe_val(row_s['_total'])
+
+            c_date = ws.cell(row=ri, column=1, value=date_val)
+            c_date.number_format = 'YYYY-MM-DD'
+            for m in range(1, 13):
+                if m == month_val:
+                    ws.cell(row=ri, column=m + 1, value=total_val)
+                else:
+                    ws.cell(row=ri, column=m + 1, value=None)
+            ws.cell(row=ri, column=14, value=total_val)
+            ri += 1
+
+    # ──────────────────────────────────
+    # 추가 시트 4: Box Plot 분석
+    # ──────────────────────────────────
+
+    def _sheet_boxplot(self, wb, df):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import matplotlib.font_manager as fm
+
+        # 한글 폰트 설정 (docx_generator.py 방식과 동일)
+        _KR_FONTS = ['Malgun Gothic', 'NanumGothic', 'AppleGothic', 'DejaVu Sans']
+        available_fonts = {f.name for f in fm.fontManager.ttflist}
+        for fn in _KR_FONTS:
+            if fn in available_fonts:
+                matplotlib.rcParams['font.family'] = fn
+                break
+        matplotlib.rcParams['axes.unicode_minus'] = False
+
+        ws = wb.create_sheet("📦 Box Plot 분석")
+        ws.sheet_view.showGridLines = False
+        ws.column_dimensions['A'].width = 14
+
+        # 타이틀
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
+        c = ws.cell(row=1, column=1, value="Box Plot 분석  —  기온·강수량 분포 (월별·연도별)")
+        c.font = Font(name=FONT, bold=True, size=13, color=C['white'])
+        c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
+        c.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+        ws.row_dimensions[1].height = 28
+
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=10)
+        c2 = ws.cell(row=2, column=1,
+                     value="※ 다이아몬드(◆) = 평균 / 상자 = IQR(Q1~Q3) / 수염 = 1.5×IQR / 점 = 이상치")
+        c2.font = Font(name=FONT, size=8, color=C['gray'])
+        c2.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+        ws.row_dimensions[2].height = 13
+
+        def _boxplot_img(data_list, labels, title, ylabel, color='skyblue', figsize=(10, 5)):
+            fig, ax = plt.subplots(figsize=figsize)
+            clean_data = [np.array([v for v in d if v is not None and not np.isnan(v)])
+                          for d in data_list]
+            clean_data = [d for d in clean_data if len(d) > 0]
+            clean_labels = [lb for d, lb in zip(
+                [np.array([v for v in d if v is not None and not np.isnan(v)])
+                 for d in data_list], labels) if len(d) > 0]
+            if not clean_data:
+                plt.close(fig)
+                return None
+            bp = ax.boxplot(clean_data, labels=clean_labels, patch_artist=True,
+                            showfliers=True, showmeans=True,
+                            meanprops={'marker': 'D', 'markerfacecolor': 'orange',
+                                       'markeredgecolor': 'orange', 'markersize': 6})
+            for patch in bp['boxes']:
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+            ax.set_title(title, fontsize=12, fontweight='bold')
+            ax.set_ylabel(ylabel, fontsize=10)
+            ax.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
+            buf = _io.BytesIO()
+            fig.savefig(buf, format='png', dpi=120)
+            plt.close(fig)
+            buf.seek(0)
+            return buf
+
+        def _insert_chart(ws, img_buf, anchor_row):
+            if img_buf is None:
+                return
+            try:
+                xl_img = XLImage(img_buf)
+                xl_img.width = 700
+                xl_img.height = 350
+                ws.add_image(xl_img, f'A{anchor_row}')
+            except Exception:
+                pass
+
+        chart_row = 3
+        CHART_HEIGHT_ROWS = 18  # 차트 1개당 점유 행 수
+
+        months = list(range(1, 13))
+        month_labels = [str(m) for m in months]
+        years = sorted(df['year'].dropna().unique().astype(int).tolist())
+        year_labels = [str(y) for y in years]
+
+        # ── 차트 1: 평균기온 월별 분포 ────────────────
+        if 'temp_avg' in df.columns:
+            data_by_month = [df[df['month'] == m]['temp_avg'].dropna().tolist()
+                             for m in months]
+            buf = _boxplot_img(data_by_month, month_labels,
+                               '【평균기온】 월별 분포', '평균기온 (℃)',
+                               color='lightcoral', figsize=(12, 5))
+            _insert_chart(ws, buf, chart_row)
+            chart_row += CHART_HEIGHT_ROWS
+
+        # ── 차트 2: 평균기온 연도별 분포 ──────────────
+        if 'temp_avg' in df.columns:
+            data_by_year = [df[df['year'] == y]['temp_avg'].dropna().tolist()
+                            for y in years]
+            buf = _boxplot_img(data_by_year, year_labels,
+                               '【평균기온】 연도별 분포', '평균기온 (℃)',
+                               color='salmon', figsize=(max(10, len(years) * 0.8 + 2), 5))
+            _insert_chart(ws, buf, chart_row)
+            chart_row += CHART_HEIGHT_ROWS
+
+        # ── 차트 3: 최고·최저기온 월별 분포 비교 ──────
+        if 'temp_max' in df.columns or 'temp_min' in df.columns:
+            fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+            for ax, col_key, label, color in [
+                ('temp_max', '최고기온 (℃)', 'tomato'),
+                ('temp_min', '최저기온 (℃)', 'steelblue'),
+            ]:
+                pass  # placeholder
+            plt.close(fig)
+
+            # 최고기온
+            if 'temp_max' in df.columns:
+                data_max = [df[df['month'] == m]['temp_max'].dropna().tolist() for m in months]
+                buf_max = _boxplot_img(data_max, month_labels,
+                                       '【최고기온】 월별 분포', '최고기온 (℃)',
+                                       color='tomato', figsize=(12, 5))
+                _insert_chart(ws, buf_max, chart_row)
+                chart_row += CHART_HEIGHT_ROWS
+
+            # 최저기온
+            if 'temp_min' in df.columns:
+                data_min = [df[df['month'] == m]['temp_min'].dropna().tolist() for m in months]
+                buf_min = _boxplot_img(data_min, month_labels,
+                                       '【최저기온】 월별 분포', '최저기온 (℃)',
+                                       color='steelblue', figsize=(12, 5))
+                _insert_chart(ws, buf_min, chart_row)
+                chart_row += CHART_HEIGHT_ROWS
+
+        # ── 차트 4: 강수량 월별 분포 ──────────────────
+        if 'precipitation' in df.columns:
+            data_precip_m = [df[df['month'] == m]['precipitation'].dropna().tolist()
+                             for m in months]
+            buf = _boxplot_img(data_precip_m, month_labels,
+                               '【강수량】 월별 분포', '강수량 (mm)',
+                               color='skyblue', figsize=(12, 5))
+            _insert_chart(ws, buf, chart_row)
+            chart_row += CHART_HEIGHT_ROWS
+
+        # ── 차트 5: 강수량 연도별 분포 (유강우일, >0mm) ─
+        if 'precipitation' in df.columns:
+            df_rain = df[df['precipitation'] > 0]
+            data_precip_y = [df_rain[df_rain['year'] == y]['precipitation'].dropna().tolist()
+                             for y in years]
+            buf = _boxplot_img(data_precip_y, year_labels,
+                               '【강수량】 연도별 분포 (유강우일 >0mm)', '강수량 (mm)',
+                               color='cornflowerblue',
+                               figsize=(max(10, len(years) * 0.8 + 2), 5))
+            _insert_chart(ws, buf, chart_row)
+            chart_row += CHART_HEIGHT_ROWS
+
+        # ── 통계 요약 표 ──────────────────────────────
+        stat_row = chart_row + 1
+        ws.merge_cells(start_row=stat_row, start_column=1, end_row=stat_row, end_column=9)
+        c = ws.cell(row=stat_row, column=1, value="통계 요약  —  월별 사분위수 (IQR) 표")
+        c.font = Font(name=FONT, bold=True, size=11, color=C['white'])
+        c.fill = PatternFill(start_color=C['mid_blue'], end_color=C['mid_blue'], fill_type='solid')
+        c.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+        ws.row_dimensions[stat_row].height = 22
+        stat_row += 1
+
+        stat_headers = ['월', '최소', 'Q1(25%)', '중앙값', '평균', 'Q3(75%)', '최대', 'IQR']
+
+        def _write_stat_block(ws, start_row, col_key, block_label):
+            if col_key not in df.columns:
+                return start_row
+            # 블록 타이틀
+            ws.merge_cells(start_row=start_row, start_column=1,
+                           end_row=start_row, end_column=len(stat_headers))
+            c = ws.cell(row=start_row, column=1, value=f"[ {block_label} ] 월별 통계")
+            c.font = Font(name=FONT, bold=True, size=9, color=C['white'])
+            c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
+            c.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+            ws.row_dimensions[start_row].height = 16
+            start_row += 1
+            # 헤더
+            for ci, h in enumerate(stat_headers, 1):
+                _hc(ws, start_row, ci, h, sz=9, bg=C['mid_blue'])
+            start_row += 1
+            # 데이터
+            for m in range(1, 13):
+                mdf = df[df['month'] == m][col_key].dropna()
+                if len(mdf) == 0:
+                    _dc(ws, start_row, 1, f'{m}월', bg=C['light_blue'])
+                    for ci in range(2, len(stat_headers) + 1):
+                        _dc(ws, start_row, ci, None)
+                else:
+                    q1 = round(float(mdf.quantile(0.25)), 2)
+                    median = round(float(mdf.median()), 2)
+                    mean = round(float(mdf.mean()), 2)
+                    q3 = round(float(mdf.quantile(0.75)), 2)
+                    iqr = round(q3 - q1, 2)
+                    vals = [f'{m}월', round(float(mdf.min()), 2), q1, median, mean,
+                            q3, round(float(mdf.max()), 2), iqr]
+                    for ci, v in enumerate(vals, 1):
+                        bg = C['light_blue'] if ci == 1 else C['white']
+                        bold = ci == 1
+                        _dc(ws, start_row, ci, v, bg=bg, bold=bold, nf='0.00')
+                start_row += 1
+            return start_row + 1
+
+        stat_row = _write_stat_block(ws, stat_row, 'temp_avg', '평균기온(℃)')
+        stat_row = _write_stat_block(ws, stat_row, 'precipitation', '강수량(mm)')
