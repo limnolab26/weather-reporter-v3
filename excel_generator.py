@@ -2295,54 +2295,60 @@ class ExcelReportGenerator:
             return ''.join(f'<i><x v="{i}"/></i>' for i in range(n)) + '<i t="grand"><x/></i>'
 
         # ── pivotCacheDefinition1.xml ───────────────────────────────
-        # 최소 구조: sharedItems에 값 없음. refreshOnLoad="1"로 Excel이 열 때 재구성.
-        # sharedItems 값과 pivotField items 간 불일치가 복구 경고의 원인이므로 모두 제거.
+        # 완전한 구조: sharedItems에 실제 값 포함 (axis 필드만, 모두 소규모).
+        # recordCount="0", refreshOnLoad 없음 → 사용자가 "새로 고침"으로 데이터 채움.
+        # 핵심: sharedItems count == 자식 요소 수, pivotField items count == sharedItems count + 1
         cache_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" refreshOnLoad="1" createdVersion="5" refreshedVersion="5" minRefreshableVersion="3" recordCount="{total_rows - 1}">
+<pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" createdVersion="5" refreshedVersion="5" minRefreshableVersion="3" recordCount="0">
 <cacheSource type="worksheet"><worksheetSource ref="A1:F{total_rows}" sheet="원본 데이터2"/></cacheSource>
 <cacheFields count="6">
-<cacheField name="날짜" numFmtId="0"><sharedItems containsBlank="1" count="0"/></cacheField>
-<cacheField name="연도" numFmtId="0"><sharedItems containsString="0" containsBlank="1" containsNumber="1" containsInteger="1" minValue="{years[0] if years else 0}" maxValue="{years[-1] if years else 0}" count="0"/></cacheField>
-<cacheField name="월" numFmtId="0"><sharedItems containsString="0" containsBlank="1" containsNumber="1" containsInteger="1" minValue="1" maxValue="12" count="0"/></cacheField>
-<cacheField name="관측소명" numFmtId="0"><sharedItems containsBlank="1" count="0"/></cacheField>
-<cacheField name="항목" numFmtId="0"><sharedItems containsBlank="1" count="0"/></cacheField>
-<cacheField name="Data" numFmtId="0"><sharedItems containsString="0" containsBlank="1" containsNumber="1" count="0"/></cacheField>
+<cacheField name="날짜" numFmtId="0"><sharedItems containsNonDate="0" containsString="0" containsBlank="1"/></cacheField>
+<cacheField name="연도" numFmtId="0"><sharedItems containsString="0" containsBlank="0" containsNumber="1" containsInteger="1" minValue="{years[0] if years else 0}" maxValue="{years[-1] if years else 0}" count="{n_years}">{num_shared(years)}</sharedItems></cacheField>
+<cacheField name="월" numFmtId="0"><sharedItems containsString="0" containsBlank="0" containsNumber="1" containsInteger="1" minValue="1" maxValue="12" count="12">{num_shared(months)}</sharedItems></cacheField>
+<cacheField name="관측소명" numFmtId="0"><sharedItems count="{n_stations}">{str_shared(stations)}</sharedItems></cacheField>
+<cacheField name="항목" numFmtId="0"><sharedItems count="{n_labels}">{str_shared(item_labels)}</sharedItems></cacheField>
+<cacheField name="Data" numFmtId="0"><sharedItems containsString="0" containsBlank="1" containsNumber="1" containsMixedTypes="1"/></cacheField>
 </cacheFields>
 </pivotCacheDefinition>'''
 
-        # ── pivotTable1.xml (피벗작업: 연도×월) ─────────────────────
-        # 최소 구조: items/rowItems/colItems 없음. refreshOnLoad 시 Excel이 생성.
-        pivot1_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" name="PivotTable_강수량" cacheId="0" dataCaption="값" updatedVersion="5" minRefreshableVersion="3" createdVersion="5" useAutoFormatting="1" compact="0" compactData="0">
-<location ref="A3:B4" firstHeaderRow="1" firstDataRow="1" firstDataCol="1"/>
+        # ── pivotTable1.xml (피벗작업: 연도(row)×월(col)) ─────────────────────
+        # items count = sharedItems count + 1 (마지막은 default 소계)
+        pivot1_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="PivotTable_강수량" cacheId="0" dataCaption="값" updatedVersion="5" minRefreshableVersion="3" createdVersion="5" useAutoFormatting="1" compact="0" compactData="0">
+<location ref="A3:N{3 + n_years}" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
 <pivotFields count="6">
 <pivotField compact="0" outline="0" showAll="0"/>
-<pivotField axis="axisRow" compact="0" outline="0" showAll="0"/>
-<pivotField axis="axisCol" compact="0" outline="0" showAll="0"/>
+<pivotField axis="axisRow" compact="0" outline="0" showAll="0"><items count="{n_years + 1}">{pf_items(n_years)}</items></pivotField>
+<pivotField axis="axisCol" compact="0" outline="0" showAll="0"><items count="13">{pf_items(12)}</items></pivotField>
 <pivotField compact="0" outline="0" showAll="0"/>
 <pivotField compact="0" outline="0" showAll="0"/>
 <pivotField dataField="1" compact="0" outline="0" showAll="0"/>
 </pivotFields>
 <rowFields count="1"><field x="1"/></rowFields>
+<rowItems count="{n_years + 1}">{row_col_items(n_years)}</rowItems>
 <colFields count="1"><field x="2"/></colFields>
-<dataFields count="1"><dataField name="합계 : Data" fld="5" baseField="0" baseItem="0"/></dataFields>
+<colItems count="13">{row_col_items(12)}</colItems>
+<dataFields count="1"><dataField name="합계 : Data" fld="5" baseField="1" baseItem="0"/></dataFields>
 </pivotTableDefinition>'''
 
-        # ── pivotTable2.xml (피벗작업2: 항목×연도) ─────────────────────
-        pivot2_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" name="PivotTable_항목별" cacheId="0" dataCaption="값" updatedVersion="5" minRefreshableVersion="3" createdVersion="5" useAutoFormatting="1" compact="0" compactData="0">
-<location ref="A3:B4" firstHeaderRow="1" firstDataRow="1" firstDataCol="1"/>
+        # ── pivotTable2.xml (피벗작업2: 항목(row)×연도(col)) ─────────────────
+        n_row2 = max(n_labels, 1)
+        pivot2_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="PivotTable_항목별" cacheId="0" dataCaption="값" updatedVersion="5" minRefreshableVersion="3" createdVersion="5" useAutoFormatting="1" compact="0" compactData="0">
+<location ref="A3:{get_column_letter(1 + n_years + 1)}{3 + n_row2}" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
 <pivotFields count="6">
 <pivotField compact="0" outline="0" showAll="0"/>
-<pivotField axis="axisCol" compact="0" outline="0" showAll="0"/>
+<pivotField axis="axisCol" compact="0" outline="0" showAll="0"><items count="{n_years + 1}">{pf_items(n_years)}</items></pivotField>
 <pivotField compact="0" outline="0" showAll="0"/>
 <pivotField compact="0" outline="0" showAll="0"/>
-<pivotField axis="axisRow" compact="0" outline="0" showAll="0"/>
+<pivotField axis="axisRow" compact="0" outline="0" showAll="0"><items count="{n_row2 + 1}">{pf_items(n_row2)}</items></pivotField>
 <pivotField dataField="1" compact="0" outline="0" showAll="0"/>
 </pivotFields>
 <rowFields count="1"><field x="4"/></rowFields>
+<rowItems count="{n_row2 + 1}">{row_col_items(n_row2)}</rowItems>
 <colFields count="1"><field x="1"/></colFields>
-<dataFields count="1"><dataField name="합계 : Data" fld="5" baseField="0" baseItem="0"/></dataFields>
+<colItems count="{n_years + 1}">{row_col_items(n_years)}</colItems>
+<dataFields count="1"><dataField name="합계 : Data" fld="5" baseField="4" baseItem="0"/></dataFields>
 </pivotTableDefinition>'''
 
         # ── Relationship XMLs ─────────────────────────────────────────
