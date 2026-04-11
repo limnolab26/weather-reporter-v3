@@ -2309,23 +2309,25 @@ class ExcelReportGenerator:
 <dataFields count="1"><dataField name="합계:Data" fld="5" baseField="0" baseItem="0"/></dataFields>
 </pivotTableDefinition>'''
 
-        # ── pivotTable2.xml (피벗작업2: 날짜×월) ─────────────────────
-        n_row2 = max(n_dates, 1)
+        # ── pivotTable2.xml (피벗작업2: 항목×연도) ─────────────────────
+        # 날짜(0)×월(2) 조합은 10,000+ rowItems 생성으로 파일 손상 유발.
+        # 항목(4, ~20개)×연도(1)로 변경 → 합리적인 크기 유지.
+        n_row2 = max(n_labels, 1)
         pivot2_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" name="PivotTable_일별" cacheId="0" applyNumberFormats="0" applyBorderFormats="0" applyFontFormats="0" applyPatternFormats="0" applyAlignmentFormats="0" applyWidthHeightFormats="1" dataCaption="값" updatedVersion="5" minRefreshableVersion="3" createdVersion="5" useAutoFormatting="1" itemPrintTitles="1" indent="2" compact="0" multipleFieldFilters="0" r:id="rId1">
-<location ref="A3:N{3+n_row2}" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
+<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" name="PivotTable_항목별" cacheId="0" applyNumberFormats="0" applyBorderFormats="0" applyFontFormats="0" applyPatternFormats="0" applyAlignmentFormats="0" applyWidthHeightFormats="1" dataCaption="값" updatedVersion="5" minRefreshableVersion="3" createdVersion="5" useAutoFormatting="1" itemPrintTitles="1" indent="2" compact="0" multipleFieldFilters="0" r:id="rId1">
+<location ref="A3:{get_column_letter(1+n_years+1)}{3+n_row2}" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
 <pivotFields count="6">
+<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+<pivotField axis="axisCol" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"><items count="{n_years+1}">{pf_items(n_years)}</items></pivotField>
+<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
 <pivotField axis="axisRow" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"><items count="{n_row2+1}">{pf_items(n_row2)}</items></pivotField>
-<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
-<pivotField axis="axisCol" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"><items count="13">{pf_items(12)}</items></pivotField>
-<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
-<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
 <pivotField axis="axisValues" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
 </pivotFields>
-<rowFields count="1"><field x="0"/></rowFields>
+<rowFields count="1"><field x="4"/></rowFields>
 <rowItems count="{n_row2+1}">{row_col_items(n_row2)}</rowItems>
-<colFields count="1"><field x="2"/></colFields>
-<colItems count="13">{row_col_items(12)}</colItems>
+<colFields count="1"><field x="1"/></colFields>
+<colItems count="{n_years+1}">{row_col_items(n_years)}</colItems>
 <dataFields count="1"><dataField name="합계:Data" fld="5" baseField="0" baseItem="0"/></dataFields>
 </pivotTableDefinition>'''
 
@@ -2391,7 +2393,12 @@ class ExcelReportGenerator:
                     ' cacheId="0" r:id="rIdPivot1"/>'
                     '</pivotCaches>'
                 )
-                new_wb_xml = wb_xml.replace('</sheets>', '</sheets>' + pivot_caches_xml)
+                # pivotCaches must appear AFTER <calcPr> in OOXML schema order.
+                # Insert before </workbook> (last child position) to satisfy schema.
+                if '</calcPr>' in wb_xml:
+                    new_wb_xml = wb_xml.replace('</calcPr>', '</calcPr>' + pivot_caches_xml, 1)
+                else:
+                    new_wb_xml = wb_xml.replace('</workbook>', pivot_caches_xml + '</workbook>', 1)
 
             # workbook.xml.rels에 캐시 관계 추가
             new_wb_rels = wb_rels
