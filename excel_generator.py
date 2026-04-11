@@ -200,6 +200,9 @@ class ExcelReportGenerator:
         self._years = sorted(df2['year'].dropna().unique().astype(int).tolist())
         self._n_rows = len(df2)
         self._has_stn = 'station_name' in df2.columns
+        self._raw2_total_rows = 1
+        self._raw2_item_labels = []
+        self._raw2_cache = None
 
         wb = openpyxl.Workbook()
         wb.remove(wb.active)
@@ -1982,165 +1985,182 @@ class ExcelReportGenerator:
                 row_r += 1
 
         ws.auto_filter.ref = f"A1:F{max(row_r - 1, 1)}"
+        self._raw2_total_rows = max(row_r - 1, 1)
+        self._raw2_item_labels = [lbl for _, lbl in elem_cols]
 
     # ──────────────────────────────────
     # 추가 시트 2: 피벗작업 (연도×월 강수량 합계)
     # ──────────────────────────────────
 
     def _sheet_pivot_work(self, wb, df):
+        from openpyxl.pivot.table import (
+            TableDefinition, Location, PivotField,
+            DataField, RowColField, PageField, FieldItem,
+        )
+        from openpyxl.pivot.cache import (
+            CacheDefinition, CacheSource, WorksheetSource,
+            CacheField, SharedItems, Text,
+        )
+
         ws = wb.create_sheet("피벗작업")
-        ws.freeze_panes = 'B5'
         ws.sheet_view.showGridLines = True
 
         ws.column_dimensions['A'].width = 12
         for ci in range(2, 15):
             ws.column_dimensions[get_column_letter(ci)].width = 9
 
-        # 타이틀 행
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=14)
-        c = ws.cell(row=1, column=1,
-                    value="피벗 테이블  —  아래 피벗 테이블을 클릭하면 필드 목록이 표시됩니다.")
-        c.font = Font(name=FONT, bold=True, size=11, color=C['white'])
-        c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
-        c.alignment = Alignment(horizontal='left', vertical='center', indent=1)
-        ws.row_dimensions[1].height = 22
+        total_rows = getattr(self, '_raw2_total_rows', 100000)
+        item_labels = getattr(self, '_raw2_item_labels', list(ELEMENT_LABELS.values()))
 
-        # 주석 행
-        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=14)
-        c2 = ws.cell(row=2, column=1,
-                     value="※ Excel 피벗 테이블  |  소스: 원본 데이터(기상데이터 Table)  |  필드를 드래그해 자유롭게 분석하세요.")
-        c2.font = Font(name=FONT, size=8, color=C['gray'])
-        c2.alignment = Alignment(horizontal='left', vertical='center', indent=1)
-        ws.row_dimensions[2].height = 13
+        precip_label = ELEMENT_LABELS.get('precipitation', '강수량(mm)')
+        try:
+            precip_idx = item_labels.index(precip_label)
+        except ValueError:
+            precip_idx = 0
 
-        if 'precipitation' not in df.columns:
-            ws.cell(row=4, column=1, value="강수량 데이터 없음")
-            return
+        # 피벗 캐시 생성 (원본 데이터2 시트 기반)
+        src = CacheSource(type='worksheet')
+        src.worksheetSource = WorksheetSource(
+            ref=f'A1:F{total_rows}', sheet='원본 데이터2')
+        cache_fields = [
+            CacheField(name='날짜',
+                       sharedItems=SharedItems(containsDate=True,
+                                               containsSemiMixedTypes=False,
+                                               containsNonDate=False)),
+            CacheField(name='연도',
+                       sharedItems=SharedItems(containsString=False,
+                                               containsNumber=True,
+                                               containsInteger=True)),
+            CacheField(name='월',
+                       sharedItems=SharedItems(containsString=False,
+                                               containsNumber=True,
+                                               containsInteger=True)),
+            CacheField(name='관측소명', sharedItems=SharedItems()),
+            CacheField(name='항목',
+                       sharedItems=SharedItems(
+                           containsSemiMixedTypes=False,
+                           containsNonDate=True,
+                           containsString=True,
+                           _fields=[Text(v=lbl) for lbl in item_labels],
+                       )),
+            CacheField(name='Data',
+                       sharedItems=SharedItems(containsString=False,
+                                               containsNumber=True)),
+        ]
+        cache = CacheDefinition(
+            cacheSource=src, cacheFields=cache_fields, refreshOnLoad=True)
+        self._raw2_cache = cache
 
-        # Row 3
-        ws.cell(row=3, column=1, value="합계 : 강수량(mm)").font = Font(name=FONT, bold=True, size=9)
-        ws.cell(row=3, column=2, value="열 레이블").font = Font(name=FONT, size=9, color=C['gray'])
-
-        # Row 4: 헤더
-        _hc(ws, 4, 1, '행 레이블', sz=9, bg=C['dark_blue'])
-        for m in range(1, 13):
-            _hc(ws, 4, m + 1, m, sz=9, bg=C['dark_blue'])
-        _hc(ws, 4, 14, '총합계', sz=9, bg=C['dark_blue'])
-        ws.auto_filter.ref = "A4:N4"
-
-        # 피벗 계산
-        pivot = (df.groupby(['year', 'month'])['precipitation']
-                 .sum()
-                 .unstack('month')
-                 .reindex(columns=range(1, 13)))
-        pivot = pivot.sort_index()
-
-        data_rows = []
-        for year, row_s in pivot.iterrows():
-            row_vals = [_safe_val(row_s.get(m)) for m in range(1, 13)]
-            valid = [v for v in row_vals if v is not None]
-            total = round(sum(valid), 1) if valid else None
-            data_rows.append((int(year), row_vals, total))
-
-        ri = 5
-        for year, row_vals, total in data_rows:
-            _dc(ws, ri, 1, year, bg=C['light_blue'], bold=True, nf='0')
-            for ci, v in enumerate(row_vals, 2):
-                _dc(ws, ri, ci, v, bg=C['light_blue'], nf='#,##0.0')
-            _dc(ws, ri, 14, total, bg=C['light_blue'], bold=True, nf='#,##0.0')
-            ri += 1
-
-        # 총합계 행
-        all_vals = [v for _, row_vals, _ in data_rows for v in row_vals if v is not None]
-        _dc(ws, ri, 1, '총합계', bg=C['dark_blue'], bold=True)
-        ws.cell(row=ri, column=1).font = Font(name=FONT, bold=True, size=9, color=C['white'])
-        ws.cell(row=ri, column=1).fill = PatternFill(
-            start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
-        for m in range(1, 13):
-            col_vals = [row_vals[m - 1] for _, row_vals, _ in data_rows
-                        if row_vals[m - 1] is not None]
-            col_total = round(sum(col_vals), 1) if col_vals else None
-            c = ws.cell(row=ri, column=m + 1, value=col_total)
-            c.font = Font(name=FONT, bold=True, size=9, color=C['white'])
-            c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
-            c.alignment = Alignment(horizontal='center', vertical='center')
-            c.number_format = '#,##0.0'
-        grand_total = round(sum(v for v in all_vals), 1) if all_vals else None
-        c = ws.cell(row=ri, column=14, value=grand_total)
-        c.font = Font(name=FONT, bold=True, size=9, color=C['white'])
-        c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
-        c.alignment = Alignment(horizontal='center', vertical='center')
-        c.number_format = '#,##0.0'
+        # 피벗 테이블 정의: 연도(행) × 월(열), 강수량 합계
+        loc = Location(ref='A3', firstHeaderRow=1, firstDataRow=1, firstDataCol=1)
+        pivot_fields = [
+            PivotField(axis=None),            # 날짜(0)
+            PivotField(axis='axisRow'),       # 연도(1) → 행
+            PivotField(axis='axisCol'),       # 월(2)  → 열
+            PivotField(axis=None),            # 관측소명(3)
+            PivotField(axis='axisPage',       # 항목(4) → 페이지 필터
+                       items=[FieldItem(t='data', x=precip_idx)]),
+            PivotField(axis='axisValues'),    # Data(5) → 값
+        ]
+        pivot = TableDefinition(
+            name='PivotTable_강수량',
+            cacheId=0,
+            dataCaption='값',
+            location=loc,
+            pivotFields=pivot_fields,
+            rowFields=[RowColField(x=1)],
+            colFields=[RowColField(x=2)],
+            pageFields=[PageField(fld=4, item=precip_idx)],
+            dataFields=[DataField(name='합계:강수량(mm)', fld=5, subtotal='sum')],
+            rowGrandTotals=True,
+            colGrandTotals=True,
+        )
+        pivot.cache = cache
+        ws.add_pivot(pivot)
 
     # ──────────────────────────────────
     # 추가 시트 3: 피벗작업2 (날짜×월 전체 Data 합계)
     # ──────────────────────────────────
 
     def _sheet_pivot_work2(self, wb, df):
+        from openpyxl.pivot.table import (
+            TableDefinition, Location, PivotField,
+            DataField, RowColField,
+        )
+        from openpyxl.pivot.cache import (
+            CacheDefinition, CacheSource, WorksheetSource,
+            CacheField, SharedItems, Text,
+        )
+
         ws = wb.create_sheet("피벗작업2")
-        ws.freeze_panes = 'B5'
         ws.sheet_view.showGridLines = True
 
         ws.column_dimensions['A'].width = 13
         for ci in range(2, 15):
             ws.column_dimensions[get_column_letter(ci)].width = 9
 
-        # 타이틀 행
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=14)
-        c = ws.cell(row=1, column=1,
-                    value="원본 데이터2(세로형) 기반 피벗테이블 — 클릭하면 필드 목록이 표시됩니다.")
-        c.font = Font(name=FONT, bold=True, size=11, color=C['white'])
-        c.fill = PatternFill(start_color=C['dark_blue'], end_color=C['dark_blue'], fill_type='solid')
-        c.alignment = Alignment(horizontal='left', vertical='center', indent=1)
-        ws.row_dimensions[1].height = 22
+        total_rows = getattr(self, '_raw2_total_rows', 100000)
+        item_labels = getattr(self, '_raw2_item_labels', list(ELEMENT_LABELS.values()))
 
-        # 주석 행
-        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=14)
-        c2 = ws.cell(row=2, column=1,
-                     value="※ 날짜·연도·월·관측소명·항목·Data 필드를 드래그해 자유롭게 분석하세요.")
-        c2.font = Font(name=FONT, size=8, color=C['gray'])
-        c2.alignment = Alignment(horizontal='left', vertical='center', indent=1)
-        ws.row_dimensions[2].height = 13
+        # 기존 캐시 재사용 또는 새로 생성
+        cache = getattr(self, '_raw2_cache', None)
+        if cache is None:
+            src = CacheSource(type='worksheet')
+            src.worksheetSource = WorksheetSource(
+                ref=f'A1:F{total_rows}', sheet='원본 데이터2')
+            cache_fields = [
+                CacheField(name='날짜',
+                           sharedItems=SharedItems(containsDate=True,
+                                                   containsSemiMixedTypes=False,
+                                                   containsNonDate=False)),
+                CacheField(name='연도',
+                           sharedItems=SharedItems(containsString=False,
+                                                   containsNumber=True,
+                                                   containsInteger=True)),
+                CacheField(name='월',
+                           sharedItems=SharedItems(containsString=False,
+                                                   containsNumber=True,
+                                                   containsInteger=True)),
+                CacheField(name='관측소명', sharedItems=SharedItems()),
+                CacheField(name='항목',
+                           sharedItems=SharedItems(
+                               containsSemiMixedTypes=False,
+                               containsNonDate=True,
+                               containsString=True,
+                               _fields=[Text(v=lbl) for lbl in item_labels],
+                           )),
+                CacheField(name='Data',
+                           sharedItems=SharedItems(containsString=False,
+                                                   containsNumber=True)),
+            ]
+            cache = CacheDefinition(
+                cacheSource=src, cacheFields=cache_fields, refreshOnLoad=True)
+            self._raw2_cache = cache
 
-        # Row 3
-        ws.cell(row=3, column=1, value="합계 : Data").font = Font(name=FONT, bold=True, size=9)
-        ws.cell(row=3, column=2, value="열 레이블").font = Font(name=FONT, size=9, color=C['gray'])
-
-        # Row 4: 헤더
-        _hc(ws, 4, 1, '행 레이블', sz=9, bg=C['dark_blue'])
-        for m in range(1, 13):
-            _hc(ws, 4, m + 1, m, sz=9, bg=C['dark_blue'])
-        _hc(ws, 4, 14, '총합계', sz=9, bg=C['dark_blue'])
-        ws.auto_filter.ref = "A4:N4"
-
-        num_cols = [k for k in ELEMENT_LABELS if k in df.columns]
-        if not num_cols:
-            ws.cell(row=5, column=1, value="수치 데이터 없음")
-            return
-
-        df_work = df[['date', 'year', 'month'] + num_cols].copy()
-        df_work['_total'] = df_work[num_cols].sum(axis=1, skipna=True)
-        df_work = df_work.sort_values('date').reset_index(drop=True)
-
-        ri = 5
-        for _, row_s in df_work.iterrows():
-            date_val = row_s.get('date', None)
-            if date_val is not None and pd.notna(date_val):
-                date_val = pd.to_datetime(date_val).to_pydatetime()
-            else:
-                date_val = None
-            month_val = int(row_s['month']) if pd.notna(row_s.get('month')) else None
-            total_val = _safe_val(row_s['_total'])
-
-            c_date = ws.cell(row=ri, column=1, value=date_val)
-            c_date.number_format = 'YYYY-MM-DD'
-            for m in range(1, 13):
-                if m == month_val:
-                    ws.cell(row=ri, column=m + 1, value=total_val)
-                else:
-                    ws.cell(row=ri, column=m + 1, value=None)
-            ws.cell(row=ri, column=14, value=total_val)
-            ri += 1
+        # 피벗 테이블 정의: 날짜(행) × 월(열), 전체 Data 합계
+        loc = Location(ref='A3', firstHeaderRow=1, firstDataRow=1, firstDataCol=1)
+        pivot_fields = [
+            PivotField(axis='axisRow'),     # 날짜(0) → 행
+            PivotField(axis=None),          # 연도(1)
+            PivotField(axis='axisCol'),     # 월(2)  → 열
+            PivotField(axis=None),          # 관측소명(3)
+            PivotField(axis=None),          # 항목(4)
+            PivotField(axis='axisValues'),  # Data(5) → 값
+        ]
+        pivot = TableDefinition(
+            name='PivotTable_일별',
+            cacheId=0,
+            dataCaption='값',
+            location=loc,
+            pivotFields=pivot_fields,
+            rowFields=[RowColField(x=0)],   # 날짜
+            colFields=[RowColField(x=2)],   # 월
+            dataFields=[DataField(name='합계:Data', fld=5, subtotal='sum')],
+            rowGrandTotals=True,
+            colGrandTotals=True,
+        )
+        pivot.cache = cache
+        ws.add_pivot(pivot)
 
     # ──────────────────────────────────
     # 추가 시트 4: Box Plot 분석
