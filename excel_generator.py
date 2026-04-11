@@ -237,7 +237,12 @@ class ExcelReportGenerator:
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
-        return output.getvalue()
+        raw_bytes = output.getvalue()
+        # 피벗 테이블 XML 직접 주입
+        try:
+            return self._inject_pivot_tables(raw_bytes, df2)
+        except Exception:
+            return raw_bytes
 
     def generate_filename(self, prefix="기상보고서") -> str:
         today = datetime.today().strftime("%Y%m%d")
@@ -1993,167 +1998,24 @@ class ExcelReportGenerator:
     # ──────────────────────────────────
 
     def _sheet_pivot_work(self, wb, df):
-        from openpyxl.pivot.table import (
-            TableDefinition, Location, PivotField,
-            DataField, RowColField,
-        )
-        from openpyxl.pivot.cache import (
-            CacheDefinition, CacheSource, WorksheetSource,
-            CacheField, SharedItems, Text,
-        )
-
+        """피벗작업 시트 생성 (빈 시트 - 피벗 테이블은 _inject_pivot_tables에서 주입)"""
         ws = wb.create_sheet("피벗작업")
         ws.sheet_view.showGridLines = True
-
         ws.column_dimensions['A'].width = 12
         for ci in range(2, 15):
             ws.column_dimensions[get_column_letter(ci)].width = 9
-
-        total_rows = getattr(self, '_raw2_total_rows', 100000)
-        item_labels = getattr(self, '_raw2_item_labels', list(ELEMENT_LABELS.values()))
-
-        # 피벗 캐시 생성 (원본 데이터2 시트 기반)
-        src = CacheSource(type='worksheet')
-        src.worksheetSource = WorksheetSource(
-            ref=f'A1:F{total_rows}', sheet='원본 데이터2')
-        cache_fields = [
-            CacheField(name='날짜',
-                       sharedItems=SharedItems(containsDate=True,
-                                               containsSemiMixedTypes=False,
-                                               containsNonDate=False)),
-            CacheField(name='연도',
-                       sharedItems=SharedItems(containsString=False,
-                                               containsNumber=True,
-                                               containsInteger=True)),
-            CacheField(name='월',
-                       sharedItems=SharedItems(containsString=False,
-                                               containsNumber=True,
-                                               containsInteger=True)),
-            CacheField(name='관측소명', sharedItems=SharedItems()),
-            CacheField(name='항목',
-                       sharedItems=SharedItems(
-                           containsSemiMixedTypes=False,
-                           containsNonDate=True,
-                           containsString=True,
-                           _fields=[Text(v=lbl) for lbl in item_labels],
-                       )),
-            CacheField(name='Data',
-                       sharedItems=SharedItems(containsString=False,
-                                               containsNumber=True)),
-        ]
-        cache = CacheDefinition(
-            cacheSource=src, cacheFields=cache_fields, refreshOnLoad=True)
-        self._raw2_cache = cache
-
-        # 피벗 테이블 정의: 연도(행) × 월(열), Data 합계
-        # ※ 항목 필터는 Excel에서 필드 목록 창을 통해 직접 설정
-        loc = Location(ref='A3', firstHeaderRow=1, firstDataRow=1, firstDataCol=1)
-        pivot_fields = [
-            PivotField(axis=None),            # 날짜(0)
-            PivotField(axis='axisRow'),       # 연도(1) → 행
-            PivotField(axis='axisCol'),       # 월(2)  → 열
-            PivotField(axis=None),            # 관측소명(3)
-            PivotField(axis=None),            # 항목(4) → 필드 목록에서 필터 설정
-            PivotField(axis='axisValues'),    # Data(5) → 값
-        ]
-        pivot = TableDefinition(
-            name='PivotTable_강수량',
-            cacheId=0,
-            dataCaption='값',
-            location=loc,
-            pivotFields=pivot_fields,
-            rowFields=[RowColField(x=1)],
-            colFields=[RowColField(x=2)],
-            dataFields=[DataField(name='합계:Data', fld=5, subtotal='sum')],
-            rowGrandTotals=True,
-            colGrandTotals=True,
-        )
-        pivot.cache = cache
-        ws.add_pivot(pivot)
 
     # ──────────────────────────────────
     # 추가 시트 3: 피벗작업2 (날짜×월 전체 Data 합계)
     # ──────────────────────────────────
 
     def _sheet_pivot_work2(self, wb, df):
-        from openpyxl.pivot.table import (
-            TableDefinition, Location, PivotField,
-            DataField, RowColField,
-        )
-        from openpyxl.pivot.cache import (
-            CacheDefinition, CacheSource, WorksheetSource,
-            CacheField, SharedItems, Text,
-        )
-
+        """피벗작업2 시트 생성 (빈 시트 - 피벗 테이블은 _inject_pivot_tables에서 주입)"""
         ws = wb.create_sheet("피벗작업2")
         ws.sheet_view.showGridLines = True
-
         ws.column_dimensions['A'].width = 13
         for ci in range(2, 15):
             ws.column_dimensions[get_column_letter(ci)].width = 9
-
-        total_rows = getattr(self, '_raw2_total_rows', 100000)
-        item_labels = getattr(self, '_raw2_item_labels', list(ELEMENT_LABELS.values()))
-
-        # 기존 캐시 재사용 또는 새로 생성
-        cache = getattr(self, '_raw2_cache', None)
-        if cache is None:
-            src = CacheSource(type='worksheet')
-            src.worksheetSource = WorksheetSource(
-                ref=f'A1:F{total_rows}', sheet='원본 데이터2')
-            cache_fields = [
-                CacheField(name='날짜',
-                           sharedItems=SharedItems(containsDate=True,
-                                                   containsSemiMixedTypes=False,
-                                                   containsNonDate=False)),
-                CacheField(name='연도',
-                           sharedItems=SharedItems(containsString=False,
-                                                   containsNumber=True,
-                                                   containsInteger=True)),
-                CacheField(name='월',
-                           sharedItems=SharedItems(containsString=False,
-                                                   containsNumber=True,
-                                                   containsInteger=True)),
-                CacheField(name='관측소명', sharedItems=SharedItems()),
-                CacheField(name='항목',
-                           sharedItems=SharedItems(
-                               containsSemiMixedTypes=False,
-                               containsNonDate=True,
-                               containsString=True,
-                               _fields=[Text(v=lbl) for lbl in item_labels],
-                           )),
-                CacheField(name='Data',
-                           sharedItems=SharedItems(containsString=False,
-                                                   containsNumber=True)),
-            ]
-            cache = CacheDefinition(
-                cacheSource=src, cacheFields=cache_fields, refreshOnLoad=True)
-            self._raw2_cache = cache
-
-        # 피벗 테이블 정의: 날짜(행) × 월(열), 전체 Data 합계
-        loc = Location(ref='A3', firstHeaderRow=1, firstDataRow=1, firstDataCol=1)
-        pivot_fields = [
-            PivotField(axis='axisRow'),     # 날짜(0) → 행
-            PivotField(axis=None),          # 연도(1)
-            PivotField(axis='axisCol'),     # 월(2)  → 열
-            PivotField(axis=None),          # 관측소명(3)
-            PivotField(axis=None),          # 항목(4)
-            PivotField(axis='axisValues'),  # Data(5) → 값
-        ]
-        pivot = TableDefinition(
-            name='PivotTable_일별',
-            cacheId=0,
-            dataCaption='값',
-            location=loc,
-            pivotFields=pivot_fields,
-            rowFields=[RowColField(x=0)],   # 날짜
-            colFields=[RowColField(x=2)],   # 월
-            dataFields=[DataField(name='합계:Data', fld=5, subtotal='sum')],
-            rowGrandTotals=True,
-            colGrandTotals=True,
-        )
-        pivot.cache = cache
-        ws.add_pivot(pivot)
 
     # ──────────────────────────────────
     # 추가 시트 4: Box Plot 분석
@@ -2362,3 +2224,260 @@ class ExcelReportGenerator:
 
         stat_row = _write_stat_block(ws, stat_row, 'temp_avg', '평균기온(℃)')
         stat_row = _write_stat_block(ws, stat_row, 'precipitation', '강수량(mm)')
+
+    # ──────────────────────────────────
+    # 피벗 테이블 XML 직접 주입
+    # ──────────────────────────────────
+
+    def _inject_pivot_tables(self, xlsx_bytes: bytes, df) -> bytes:
+        """
+        완성된 XLSX 바이트에 피벗 테이블 XML을 직접 주입합니다.
+        openpyxl의 불완전한 피벗 테이블 지원을 우회합니다.
+        """
+        import zipfile
+        import io as _io
+        import re
+
+        # ── 데이터 수집 ──────────────────────────────────
+        years = sorted(df['year'].dropna().unique().astype(int).tolist())
+        months = list(range(1, 13))
+        stations = (sorted(df['station_name'].dropna().unique().tolist())
+                    if 'station_name' in df.columns else ['관측소'])
+        item_labels = getattr(self, '_raw2_item_labels', list(ELEMENT_LABELS.values()))
+        total_rows = getattr(self, '_raw2_total_rows', 100000)
+
+        # 고유 날짜 (string 형식)
+        if 'date' in df.columns:
+            dates = sorted(df['date'].dropna().dt.strftime('%Y-%m-%d').unique().tolist())
+        else:
+            dates = []
+
+        n_years = len(years)
+        n_dates = len(dates)
+        n_stations = len(stations)
+        n_labels = len(item_labels)
+
+        # ── XML 생성 헬퍼 ─────────────────────────────────
+        def esc(s):
+            """XML 특수문자 이스케이프"""
+            return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+        def str_shared(vals):
+            return ''.join(f'<s v="{esc(v)}"/>' for v in vals)
+
+        def num_shared(vals):
+            return ''.join(f'<n v="{v}"/>' for v in vals)
+
+        def pf_items(n):
+            """pivotField items: <item x="0"/><item x="1"/>...<item t="default"/>"""
+            return ''.join(f'<item x="{i}"/>' for i in range(n)) + '<item t="default"/>'
+
+        def row_col_items(n):
+            """rowItems or colItems: <i><x v="0"/></i>...<i t="grand"><x/></i>"""
+            return ''.join(f'<i><x v="{i}"/></i>' for i in range(n)) + '<i t="grand"><x/></i>'
+
+        # ── pivotCacheDefinition1.xml ───────────────────────────────
+        cache_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1" refreshOnLoad="1" createdVersion="5" refreshedVersion="5" minRefreshableVersion="5" recordCount="0">
+<cacheSource type="worksheet"><worksheetSource ref="A1:F{total_rows}" sheet="원본 데이터2"/></cacheSource>
+<cacheFields count="6">
+<cacheField name="날짜" numFmtId="0"><sharedItems count="{n_dates}" containsSemiMixedTypes="0" containsNonDate="1" containsString="1">{str_shared(dates)}</sharedItems></cacheField>
+<cacheField name="연도" numFmtId="0"><sharedItems count="{n_years}" containsString="0" containsNumber="1" containsInteger="1" minValue="{years[0] if years else 0}" maxValue="{years[-1] if years else 0}">{num_shared(years)}</sharedItems></cacheField>
+<cacheField name="월" numFmtId="0"><sharedItems count="12" containsString="0" containsNumber="1" containsInteger="1" minValue="1" maxValue="12">{num_shared(months)}</sharedItems></cacheField>
+<cacheField name="관측소명" numFmtId="0"><sharedItems count="{n_stations}" containsSemiMixedTypes="0" containsNonDate="1" containsString="1">{str_shared(stations)}</sharedItems></cacheField>
+<cacheField name="항목" numFmtId="0"><sharedItems count="{n_labels}" containsSemiMixedTypes="0" containsNonDate="1" containsString="1">{str_shared(item_labels)}</sharedItems></cacheField>
+<cacheField name="Data" numFmtId="0"><sharedItems count="0" containsString="0" containsNumber="1"/></cacheField>
+</cacheFields>
+</pivotCacheDefinition>'''
+
+        # ── pivotTable1.xml (피벗작업: 연도×월) ─────────────────────
+        pivot1_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" name="PivotTable_강수량" cacheId="0" applyNumberFormats="0" applyBorderFormats="0" applyFontFormats="0" applyPatternFormats="0" applyAlignmentFormats="0" applyWidthHeightFormats="1" dataCaption="값" updatedVersion="5" minRefreshableVersion="3" createdVersion="5" useAutoFormatting="1" itemPrintTitles="1" indent="2" compact="0" multipleFieldFilters="0" r:id="rId1">
+<location ref="A3:N{3+n_years}" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
+<pivotFields count="6">
+<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+<pivotField axis="axisRow" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"><items count="{n_years+1}">{pf_items(n_years)}</items></pivotField>
+<pivotField axis="axisCol" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"><items count="13">{pf_items(12)}</items></pivotField>
+<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+<pivotField axis="axisValues" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+</pivotFields>
+<rowFields count="1"><field x="1"/></rowFields>
+<rowItems count="{n_years+1}">{row_col_items(n_years)}</rowItems>
+<colFields count="1"><field x="2"/></colFields>
+<colItems count="13">{row_col_items(12)}</colItems>
+<dataFields count="1"><dataField name="합계:Data" fld="5" baseField="0" baseItem="0"/></dataFields>
+</pivotTableDefinition>'''
+
+        # ── pivotTable2.xml (피벗작업2: 날짜×월) ─────────────────────
+        n_row2 = max(n_dates, 1)
+        pivot2_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" name="PivotTable_일별" cacheId="0" applyNumberFormats="0" applyBorderFormats="0" applyFontFormats="0" applyPatternFormats="0" applyAlignmentFormats="0" applyWidthHeightFormats="1" dataCaption="값" updatedVersion="5" minRefreshableVersion="3" createdVersion="5" useAutoFormatting="1" itemPrintTitles="1" indent="2" compact="0" multipleFieldFilters="0" r:id="rId1">
+<location ref="A3:N{3+n_row2}" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
+<pivotFields count="6">
+<pivotField axis="axisRow" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"><items count="{n_row2+1}">{pf_items(n_row2)}</items></pivotField>
+<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+<pivotField axis="axisCol" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"><items count="13">{pf_items(12)}</items></pivotField>
+<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+<pivotField compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+<pivotField axis="axisValues" compact="0" outline="0" subtotalTop="0" showAll="0" includeNewItemsInFilter="1"/>
+</pivotFields>
+<rowFields count="1"><field x="0"/></rowFields>
+<rowItems count="{n_row2+1}">{row_col_items(n_row2)}</rowItems>
+<colFields count="1"><field x="2"/></colFields>
+<colItems count="13">{row_col_items(12)}</colItems>
+<dataFields count="1"><dataField name="합계:Data" fld="5" baseField="0" baseItem="0"/></dataFields>
+</pivotTableDefinition>'''
+
+        # ── Relationship XMLs ─────────────────────────────────────────
+        CACHE_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"
+        REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+
+        cache_rels_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="{REL_NS}"></Relationships>'''
+
+        pt1_rels_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="{REL_NS}"><Relationship Id="rId1" Type="{CACHE_NS}" Target="../pivotCache/pivotCacheDefinition1.xml"/></Relationships>'''
+
+        pt2_rels_xml = pt1_rels_xml  # 같은 캐시 참조
+
+        # ── ZIP 처리 ──────────────────────────────────────────────────
+        in_buf = _io.BytesIO(xlsx_bytes)
+        out_buf = _io.BytesIO()
+
+        with zipfile.ZipFile(in_buf, 'r') as zin:
+            # workbook.xml 및 관계 파일 읽기
+            wb_rels = zin.read('xl/_rels/workbook.xml.rels').decode('utf-8')
+            wb_xml = zin.read('xl/workbook.xml').decode('utf-8')
+
+            # 시트 이름 → r:id 매핑 (속성 순서 무관하게 태그 전체에서 추출)
+            sheet_ridmap = {}
+            for tag_m in re.finditer(r'<sheet\s[^>]+>', wb_xml):
+                tag = tag_m.group(0)
+                name_m = re.search(r'name="([^"]+)"', tag)
+                rid_m = re.search(r'r:id="(rId\d+)"', tag)
+                if name_m and rid_m:
+                    sheet_ridmap[name_m.group(1)] = rid_m.group(1)
+
+            # r:id → 파일 경로 매핑 (속성 순서 무관하게 태그 전체에서 추출)
+            rid_to_file = {}
+            for tag_m in re.finditer(r'<Relationship[^>]+>', wb_rels):
+                tag = tag_m.group(0)
+                id_m = re.search(r'Id="(rId\d+)"', tag)
+                tgt_m = re.search(r'Target="([^"]+)"', tag)
+                if id_m and tgt_m:
+                    rid_to_file[id_m.group(1)] = tgt_m.group(1)
+
+            def sheet_file_num(sheet_name):
+                rid = sheet_ridmap.get(sheet_name, '')
+                path = rid_to_file.get(rid, '')
+                m = re.search(r'sheet(\d+)\.xml', path)
+                return int(m.group(1)) if m else None
+
+            sn1 = sheet_file_num("피벗작업")
+            sn2 = sheet_file_num("피벗작업2")
+            if sn1 is None or sn2 is None:
+                return xlsx_bytes  # 시트를 찾을 수 없으면 원본 반환
+
+            sheet1_rels_path = f'xl/worksheets/_rels/sheet{sn1}.xml.rels'
+            sheet2_rels_path = f'xl/worksheets/_rels/sheet{sn2}.xml.rels'
+
+            # workbook.xml에 pivotCaches 섹션 추가
+            new_wb_xml = wb_xml
+            if '<pivotCaches>' not in wb_xml:
+                pivot_caches_xml = (
+                    '<pivotCaches>'
+                    '<pivotCache xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+                    ' cacheId="0" r:id="rIdPivot1"/>'
+                    '</pivotCaches>'
+                )
+                new_wb_xml = wb_xml.replace('</sheets>', '</sheets>' + pivot_caches_xml)
+
+            # workbook.xml.rels에 캐시 관계 추가
+            new_wb_rels = wb_rels
+            if 'pivotCacheDefinition' not in wb_rels:
+                cache_rel = (
+                    '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"'
+                    ' Target="/xl/pivotCache/pivotCacheDefinition1.xml" Id="rIdPivot1"/>'
+                )
+                new_wb_rels = wb_rels.replace('</Relationships>', cache_rel + '</Relationships>')
+
+            # [Content_Types].xml에 피벗 관련 content type 추가
+            ct_xml = zin.read('[Content_Types].xml').decode('utf-8')
+            new_ct_xml = ct_xml
+            CT_PIVOT_CACHE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml'
+            CT_PIVOT_TABLE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml'
+
+            additions = ''
+            if 'pivotCacheDefinition' not in ct_xml:
+                additions += f'<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="{CT_PIVOT_CACHE}"/>'
+            if CT_PIVOT_TABLE not in ct_xml:
+                additions += f'<Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="{CT_PIVOT_TABLE}"/>'
+                additions += f'<Override PartName="/xl/pivotTables/pivotTable2.xml" ContentType="{CT_PIVOT_TABLE}"/>'
+            if additions:
+                new_ct_xml = ct_xml.replace('</Types>', additions + '</Types>')
+
+            # 피벗 테이블 관계 항목
+            pt_rel_entry = (
+                '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable"'
+                ' Target="../pivotTables/pivotTable1.xml" Id="rIdPT1"/>'
+            )
+            pt2_rel_entry = (
+                '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable"'
+                ' Target="../pivotTables/pivotTable2.xml" Id="rIdPT1"/>'
+            )
+
+            skip_paths = {
+                'xl/workbook.xml',
+                'xl/_rels/workbook.xml.rels',
+                '[Content_Types].xml',
+                sheet1_rels_path,
+                sheet2_rels_path,
+                'xl/pivotCache/pivotCacheDefinition1.xml',
+                'xl/pivotTables/pivotTable1.xml',
+                'xl/pivotTables/pivotTable2.xml',
+                'xl/pivotTables/_rels/pivotTable1.xml.rels',
+                'xl/pivotTables/_rels/pivotTable2.xml.rels',
+            }
+
+            existing_names = {item.filename for item in zin.infolist()}
+
+            with zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zout:
+                # 기존 파일 복사 (수정 대상 제외)
+                for item in zin.infolist():
+                    if item.filename in skip_paths:
+                        continue
+                    zout.writestr(item, zin.read(item.filename))
+
+                # 수정된 파일 쓰기
+                zout.writestr('xl/workbook.xml', new_wb_xml.encode('utf-8'))
+                zout.writestr('xl/_rels/workbook.xml.rels', new_wb_rels.encode('utf-8'))
+                zout.writestr('[Content_Types].xml', new_ct_xml.encode('utf-8'))
+
+                # 피벗 캐시
+                zout.writestr('xl/pivotCache/pivotCacheDefinition1.xml', cache_xml.encode('utf-8'))
+                zout.writestr('xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels',
+                              cache_rels_xml.encode('utf-8'))
+
+                # 피벗 테이블 XML
+                zout.writestr('xl/pivotTables/pivotTable1.xml', pivot1_xml.encode('utf-8'))
+                zout.writestr('xl/pivotTables/pivotTable2.xml', pivot2_xml.encode('utf-8'))
+                zout.writestr('xl/pivotTables/_rels/pivotTable1.xml.rels', pt1_rels_xml.encode('utf-8'))
+                zout.writestr('xl/pivotTables/_rels/pivotTable2.xml.rels', pt2_rels_xml.encode('utf-8'))
+
+                # 시트 rels 파일 (피벗 테이블 링크 추가)
+                for rels_path, rel_entry in [
+                    (sheet1_rels_path, pt_rel_entry),
+                    (sheet2_rels_path, pt2_rel_entry),
+                ]:
+                    if rels_path in existing_names:
+                        existing = zin.read(rels_path).decode('utf-8')
+                        new_rels = existing.replace('</Relationships>', rel_entry + '</Relationships>')
+                    else:
+                        new_rels = (
+                            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                            f'<Relationships xmlns="{REL_NS}">{rel_entry}</Relationships>'
+                        )
+                    zout.writestr(rels_path, new_rels.encode('utf-8'))
+
+        return out_buf.getvalue()
