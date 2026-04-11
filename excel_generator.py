@@ -2277,18 +2277,29 @@ class ExcelReportGenerator:
             return ''.join(f'<i><x v="{i}"/></i>' for i in range(n)) + '<i t="grand"><x/></i>'
 
         # ── pivotCacheDefinition1.xml ───────────────────────────────
+        # r:id="rId1" → pivotCacheRecords1.xml (반드시 rels에서 해결 가능해야 함)
+        # 날짜 sharedItems는 생략 (10,000+ 항목 → XML 과부하 경고 유발)
+        # refreshOnLoad="1" 이므로 Excel이 열 때 소스에서 자동 재구성함
         cache_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1" refreshOnLoad="1" createdVersion="5" refreshedVersion="5" minRefreshableVersion="5" recordCount="0">
 <cacheSource type="worksheet"><worksheetSource ref="A1:F{total_rows}" sheet="원본 데이터2"/></cacheSource>
 <cacheFields count="6">
-<cacheField name="날짜" numFmtId="0"><sharedItems count="{n_dates}" containsSemiMixedTypes="0" containsNonDate="1" containsString="1">{str_shared(dates)}</sharedItems></cacheField>
+<cacheField name="날짜" numFmtId="0"><sharedItems containsSemiMixedTypes="0" containsNonDate="1" containsString="1"/></cacheField>
 <cacheField name="연도" numFmtId="0"><sharedItems count="{n_years}" containsString="0" containsNumber="1" containsInteger="1" minValue="{years[0] if years else 0}" maxValue="{years[-1] if years else 0}">{num_shared(years)}</sharedItems></cacheField>
 <cacheField name="월" numFmtId="0"><sharedItems count="12" containsString="0" containsNumber="1" containsInteger="1" minValue="1" maxValue="12">{num_shared(months)}</sharedItems></cacheField>
 <cacheField name="관측소명" numFmtId="0"><sharedItems count="{n_stations}" containsSemiMixedTypes="0" containsNonDate="1" containsString="1">{str_shared(stations)}</sharedItems></cacheField>
 <cacheField name="항목" numFmtId="0"><sharedItems count="{n_labels}" containsSemiMixedTypes="0" containsNonDate="1" containsString="1">{str_shared(item_labels)}</sharedItems></cacheField>
-<cacheField name="Data" numFmtId="0"><sharedItems count="0" containsString="0" containsNumber="1"/></cacheField>
+<cacheField name="Data" numFmtId="0"><sharedItems containsString="0" containsNumber="1"/></cacheField>
 </cacheFields>
 </pivotCacheDefinition>'''
+
+        # ── pivotCacheRecords1.xml (빈 레코드, refreshOnLoad로 재구성됨) ──
+        cache_records_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+            ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+            ' count="0"/>'
+        )
 
         # ── pivotTable1.xml (피벗작업: 연도×월) ─────────────────────
         pivot1_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -2335,8 +2346,14 @@ class ExcelReportGenerator:
         CACHE_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"
         REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 
-        cache_rels_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="{REL_NS}"></Relationships>'''
+        # pivotCacheDefinition r:id="rId1" → pivotCacheRecords1.xml
+        CACHE_RECORDS_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords"
+        cache_rels_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            f'<Relationships xmlns="{REL_NS}">'
+            f'<Relationship Id="rId1" Type="{CACHE_RECORDS_NS}" Target="pivotCacheRecords1.xml"/>'
+            '</Relationships>'
+        )
 
         pt1_rels_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="{REL_NS}"><Relationship Id="rId1" Type="{CACHE_NS}" Target="../pivotCache/pivotCacheDefinition1.xml"/></Relationships>'''
@@ -2413,11 +2430,14 @@ class ExcelReportGenerator:
             ct_xml = zin.read('[Content_Types].xml').decode('utf-8')
             new_ct_xml = ct_xml
             CT_PIVOT_CACHE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml'
+            CT_PIVOT_RECORDS = 'application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml'
             CT_PIVOT_TABLE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml'
 
             additions = ''
             if 'pivotCacheDefinition' not in ct_xml:
                 additions += f'<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="{CT_PIVOT_CACHE}"/>'
+            if 'pivotCacheRecords' not in ct_xml:
+                additions += f'<Override PartName="/xl/pivotCache/pivotCacheRecords1.xml" ContentType="{CT_PIVOT_RECORDS}"/>'
             if CT_PIVOT_TABLE not in ct_xml:
                 additions += f'<Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="{CT_PIVOT_TABLE}"/>'
                 additions += f'<Override PartName="/xl/pivotTables/pivotTable2.xml" ContentType="{CT_PIVOT_TABLE}"/>'
@@ -2441,6 +2461,8 @@ class ExcelReportGenerator:
                 sheet1_rels_path,
                 sheet2_rels_path,
                 'xl/pivotCache/pivotCacheDefinition1.xml',
+                'xl/pivotCache/pivotCacheRecords1.xml',
+                'xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels',
                 'xl/pivotTables/pivotTable1.xml',
                 'xl/pivotTables/pivotTable2.xml',
                 'xl/pivotTables/_rels/pivotTable1.xml.rels',
@@ -2463,6 +2485,7 @@ class ExcelReportGenerator:
 
                 # 피벗 캐시
                 zout.writestr('xl/pivotCache/pivotCacheDefinition1.xml', cache_xml.encode('utf-8'))
+                zout.writestr('xl/pivotCache/pivotCacheRecords1.xml', cache_records_xml.encode('utf-8'))
                 zout.writestr('xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels',
                               cache_rels_xml.encode('utf-8'))
 
