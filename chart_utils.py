@@ -1,12 +1,13 @@
 """
-chart_utils.py — Plotly 차트 데이터 CSV 추출 유틸리티
+chart_utils.py — Plotly 차트 데이터 XLSX 추출 유틸리티
 
 모든 분석 모듈에서 공용으로 사용합니다.
 st.plotly_chart() 직후에 chart_download_btn()을 호출하면
-차트 데이터를 CSV로 다운로드할 수 있는 버튼이 표시됩니다.
+차트 데이터와 차트 이미지가 포함된 XLSX 파일을 다운로드할 수 있는 버튼이 표시됩니다.
 """
 from __future__ import annotations
 from typing import Optional
+import io
 import pandas as pd
 
 
@@ -68,22 +69,88 @@ def fig_to_df(fig) -> Optional[pd.DataFrame]:
         return None
 
 
+def _build_xlsx(fig, filename: str) -> Optional[bytes]:
+    """Plotly figure를 데이터 시트 + 차트 이미지 시트가 포함된 XLSX bytes로 변환합니다.
+
+    실패 시 None 반환.
+    """
+    try:
+        import openpyxl
+        from openpyxl.drawing.image import Image as XLImage
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+
+        # ── 데이터 시트 ──────────────────────────────────────
+        ws_data = wb.active
+        ws_data.title = "데이터"
+
+        df = fig_to_df(fig)
+        if df is not None and not df.empty:
+            # 헤더
+            for ci, col in enumerate(df.columns, 1):
+                cell = ws_data.cell(row=1, column=ci, value=col)
+                cell.font = openpyxl.styles.Font(bold=True)
+            # 데이터 행
+            for ri, row_tuple in enumerate(df.itertuples(index=False), 2):
+                for ci, val in enumerate(row_tuple, 1):
+                    ws_data.cell(row=ri, column=ci, value=val)
+            # 열 너비 자동 조정
+            for ci, col in enumerate(df.columns, 1):
+                max_len = max(len(str(col)), df[col].astype(str).str.len().max())
+                ws_data.column_dimensions[get_column_letter(ci)].width = min(max_len + 4, 40)
+
+        # ── 차트 이미지 시트 ─────────────────────────────────
+        try:
+            img_bytes = fig.to_image(format='png', width=1200, height=600, scale=1.5)
+            ws_chart = wb.create_sheet("차트")
+            img = XLImage(io.BytesIO(img_bytes))
+            img.anchor = 'A1'
+            ws_chart.add_image(img)
+        except Exception:
+            # kaleido 미설치 또는 렌더링 실패 시 차트 시트는 생략
+            pass
+
+        out = io.BytesIO()
+        wb.save(out)
+        return out.getvalue()
+    except Exception:
+        return None
+
+
 def chart_download_btn(fig, key: str, filename: str = "chart_data") -> None:
-    """Plotly figure 데이터를 CSV로 다운로드하는 버튼을 표시합니다.
+    """Plotly figure 데이터를 차트 이미지가 포함된 XLSX로 다운로드하는 버튼을 표시합니다.
+
+    - 데이터 시트: trace 데이터 (모든 차트 타입 지원)
+    - 차트 시트: kaleido로 렌더링한 PNG 이미지 (kaleido 미설치 시 생략)
+    - 완전 실패 시 CSV로 폴백
 
     Args:
         fig:      st.plotly_chart()에 넘긴 것과 동일한 Plotly figure 객체
         key:      Streamlit 위젯 고유 키 (앱 전체에서 중복 불가)
-        filename: 다운로드 파일명 (.csv 확장자 자동 추가)
+        filename: 다운로드 파일명 (.xlsx 확장자 자동 추가)
     """
     import streamlit as st
-    df = fig_to_df(fig)
-    if df is not None and not df.empty:
-        csv = df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+
+    xlsx_bytes = _build_xlsx(fig, filename)
+
+    if xlsx_bytes is not None:
         st.download_button(
-            "⬇️ 차트 데이터 CSV",
-            csv,
-            f"{filename}.csv",
-            "text/csv",
+            "⬇️ 차트 XLSX 다운로드",
+            xlsx_bytes,
+            f"{filename}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key=key,
         )
+    else:
+        # 폴백: CSV
+        df = fig_to_df(fig)
+        if df is not None and not df.empty:
+            csv = df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+            st.download_button(
+                "⬇️ 차트 데이터 CSV",
+                csv,
+                f"{filename}.csv",
+                "text/csv",
+                key=key,
+            )

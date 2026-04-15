@@ -621,6 +621,7 @@ def _tab_pressure(df: pd.DataFrame) -> None:
         legend={"orientation": "h", "y": -0.2},
     )
     st.plotly_chart(fig_annual, use_container_width=True)
+    chart_download_btn(fig_annual, key="wind_pressure_annual_chart", filename="annual_pressure_trend")
 
 
 # ──────────────────────────────────────────────────────────────

@@ -917,6 +917,7 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
     fig.update_layout(height=420,
                       legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="precip_seasonal_chart", filename="seasonal_precipitation")
 
     # ── 기간별 산점도 (연강수량 vs 기간강수량) ────────────────
     st.markdown("#### 연강수량 vs 기간별 강수량")
@@ -947,6 +948,7 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
         fig_sc.update_layout(height=340, showlegend=(len(selected_periods) == 1))
         with cols[ci % n_cols]:
             st.plotly_chart(fig_sc, use_container_width=True)
+            chart_download_btn(fig_sc, key="precip_scatter_chart", filename="precipitation_scatter")
 
     csv = show_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", csv, "여름강수집중도.csv", "text/csv", key="summer_conc_csv")
@@ -1030,6 +1032,7 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
         )
     fig_trend.update_layout(height=420)
     st.plotly_chart(fig_trend, use_container_width=True)
+    chart_download_btn(fig_trend, key="precip_trend2_chart", filename="precipitation_trend2")
 
     # ── 단일 관측소 상세 막대 ──
     st.markdown("#### 관측소별 상세 분석")
@@ -1052,6 +1055,7 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
     )
     fig.update_layout(height=380)
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="precip_monthly_chart", filename="monthly_precip_chart")
 
     # 강우강도 스택 막대
     st.markdown("#### 강우강도 등급별 연도별 일수")
@@ -1065,3 +1069,4 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
         ))
     fig2.update_layout(barmode="stack", height=380, xaxis_title="연도", yaxis_title="일수")
     st.plotly_chart(fig2, use_container_width=True)
+    chart_download_btn(fig2, key="precip_compare_chart", filename="precipitation_compare")
