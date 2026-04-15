@@ -623,12 +623,16 @@ def _render_climate_reference(df: pd.DataFrame) -> None:
 
 
 def render(df: pd.DataFrame) -> None:
+    _btn = (
+        'display:inline-block;vertical-align:middle;padding:5px 14px;'
+        'border-radius:8px;font-size:0.88rem;text-decoration:none;font-weight:600;margin-left:10px;'
+    )
     st.markdown(
         '<h2 style="display:inline;vertical-align:middle">기후변화 분석</h2>'
-        '&nbsp;&nbsp;<a href="https://climate.go.kr/atlas/dsh/ccf" target="_blank"'
-        ' style="display:inline-block;vertical-align:middle;padding:5px 14px;'
-        'background:#1a5276;color:white;border-radius:8px;font-size:0.88rem;'
-        'text-decoration:none;font-weight:600">🗺️ 기후변화 상황지도</a>',
+        f'<a href="https://climate.go.kr/atlas/dsh/ccf" target="_blank"'
+        f' style="{_btn}background:#1a5276;color:white;">🗺️ 기후변화 상황지도</a>'
+        f'<a href="https://earth.nullschool.net/ko/" target="_blank"'
+        f' style="{_btn}background:#145a32;color:white;">🌍 Now, Global Weather</a>',
         unsafe_allow_html=True,
     )
     st.markdown("<br>", unsafe_allow_html=True)
