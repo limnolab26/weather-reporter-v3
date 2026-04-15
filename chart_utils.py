@@ -6,7 +6,7 @@ st.plotly_chart() 직후에 chart_download_btn()을 호출하면
 차트 데이터와 차트 이미지가 포함된 XLSX 파일을 다운로드할 수 있는 버튼이 표시됩니다.
 """
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Tuple
 import io
 import pandas as pd
 
@@ -69,11 +69,15 @@ def fig_to_df(fig) -> Optional[pd.DataFrame]:
         return None
 
 
-def _build_xlsx(fig, filename: str) -> Optional[bytes]:
+def _build_xlsx(fig, filename: str) -> Tuple[Optional[bytes], Optional[str]]:
     """Plotly figure를 데이터 시트 + 차트 이미지 시트가 포함된 XLSX bytes로 변환합니다.
 
-    실패 시 None 반환.
+    Returns:
+        (xlsx_bytes, chart_error_msg)
+        - xlsx_bytes: XLSX 파일 bytes (항상 생성, 실패 시 None)
+        - chart_error_msg: 차트 이미지 생성 실패 메시지 (성공 시 None)
     """
+    chart_error: Optional[str] = None
     try:
         import openpyxl
         from openpyxl.drawing.image import Image as XLImage
@@ -102,20 +106,21 @@ def _build_xlsx(fig, filename: str) -> Optional[bytes]:
 
         # ── 차트 이미지 시트 ─────────────────────────────────
         try:
-            img_bytes = fig.to_image(format='png', width=1200, height=600, scale=1.5)
+            import plotly.io as pio
+            img_bytes = pio.to_image(fig, format='png', width=1200, height=600, scale=1.5, engine='kaleido')
             ws_chart = wb.create_sheet("차트")
             img = XLImage(io.BytesIO(img_bytes))
             img.anchor = 'A1'
             ws_chart.add_image(img)
-        except Exception:
-            # kaleido 미설치 또는 렌더링 실패 시 차트 시트는 생략
-            pass
+        except Exception as e:
+            chart_error = f"{type(e).__name__}: {e}"
 
         out = io.BytesIO()
         wb.save(out)
-        return out.getvalue()
-    except Exception:
-        return None
+        return out.getvalue(), chart_error
+
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"
 
 
 def chart_download_btn(fig, key: str, filename: str = "chart_data") -> None:
@@ -132,7 +137,7 @@ def chart_download_btn(fig, key: str, filename: str = "chart_data") -> None:
     """
     import streamlit as st
 
-    xlsx_bytes = _build_xlsx(fig, filename)
+    xlsx_bytes, chart_error = _build_xlsx(fig, filename)
 
     if xlsx_bytes is not None:
         st.download_button(
@@ -142,6 +147,8 @@ def chart_download_btn(fig, key: str, filename: str = "chart_data") -> None:
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key=key,
         )
+        if chart_error:
+            st.caption(f"⚠️ 차트 이미지 생성 실패 (데이터 시트만 포함): {chart_error}")
     else:
         # 폴백: CSV
         df = fig_to_df(fig)
@@ -154,3 +161,5 @@ def chart_download_btn(fig, key: str, filename: str = "chart_data") -> None:
                 "text/csv",
                 key=key,
             )
+        if chart_error:
+            st.caption(f"⚠️ XLSX 생성 실패: {chart_error}")
