@@ -801,16 +801,89 @@ with tab_climate:
 
 with tab_ccmap:
     st.subheader("🗺️ 기후변화 상황지도")
-    st.caption("출처: 기상청 기후변화 상황지도 (climate.go.kr)")
+    st.markdown("""
+<style>
+.ccmap-card {
+    background: linear-gradient(135deg, #0f3460 0%, #16547a 50%, #1a7a5e 100%);
+    border-radius: 16px;
+    padding: 48px 40px;
+    color: #ffffff;
+    margin-bottom: 20px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+    position: relative;
+    overflow: hidden;
+}
+.ccmap-card::before {
+    content: "🌍";
+    position: absolute;
+    right: 36px;
+    top: 24px;
+    font-size: 6rem;
+    opacity: 0.15;
+    line-height: 1;
+}
+.ccmap-title {
+    font-size: 1.9rem;
+    font-weight: 800;
+    margin: 0 0 10px 0;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.ccmap-desc {
+    font-size: 1.05rem;
+    color: #b8e4d4;
+    margin: 0 0 28px 0;
+    line-height: 1.75;
+}
+.ccmap-features {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+}
+.ccmap-feat {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 0.9rem;
+    color: #e0f4ee;
+    flex: 1;
+    min-width: 150px;
+}
+.ccmap-feat-icon {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: 4px;
+}
+.ccmap-source {
+    font-size: 0.82rem;
+    color: rgba(255,255,255,0.5);
+    margin-top: 8px;
+}
+</style>
+<div class="ccmap-card">
+    <div class="ccmap-title">기후변화 상황지도</div>
+    <div class="ccmap-desc">
+        기상청이 제공하는 대화형 기후변화 상황지도입니다.<br>
+        우리나라 기온·강수량·극한기후 등의 과거 추이와 미래 시나리오를 지도 위에서 직관적으로 확인할 수 있습니다.
+    </div>
+    <div class="ccmap-features">
+        <div class="ccmap-feat"><span class="ccmap-feat-icon">🌡️</span>기온 변화 추이</div>
+        <div class="ccmap-feat"><span class="ccmap-feat-icon">🌧️</span>강수량 변화 분석</div>
+        <div class="ccmap-feat"><span class="ccmap-feat-icon">⚡</span>극한기후 발생 현황</div>
+        <div class="ccmap-feat"><span class="ccmap-feat-icon">🔮</span>미래 기후 시나리오</div>
+        <div class="ccmap-feat"><span class="ccmap-feat-icon">🗺️</span>지역별 공간 분포도</div>
+    </div>
+    <div class="ccmap-source">출처: 기상청 기후변화 상황지도 · climate.go.kr</div>
+</div>
+""", unsafe_allow_html=True)
+
     st.link_button(
-        "🔗 새 창에서 열기",
+        "🔗 기후변화 상황지도 열기  →  climate.go.kr/atlas/dsh/ccf",
         "https://climate.go.kr/atlas/dsh/ccf",
+        use_container_width=True,
     )
-    st.components.v1.iframe(
-        "https://climate.go.kr/atlas/dsh/ccf",
-        height=780,
-        scrolling=True,
-    )
+    st.caption("※ 보안 정책으로 인해 외부 사이트는 새 브라우저 창에서 열립니다.")
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # TAB9 — 보고서 다운로드
