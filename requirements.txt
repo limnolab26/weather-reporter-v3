@@ -64,10 +64,3 @@ python-dateutil>=2.9.0
 pytz>=2024.1
 
 python-docx>=1.1.2
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Plotly → PNG (chart image export)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-kaleido==0.1.0.post1
