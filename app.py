@@ -25,6 +25,7 @@ import analysis_wind
 import analysis_agri
 import analysis_climate
 import analysis_soiltemp
+import analysis_custom
 from chart_utils import chart_download_btn
 
 # Plotly 전역 글씨 크기 설정 (모든 그래프에 적용)
@@ -334,11 +335,11 @@ st.sidebar.link_button("⛰️ 산악기상정보시스템", "https://mtweather.
 st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/realSearch?pMENU_NO=97")
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 탭 생성 (9탭)
+# 탭 생성 (10탭)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 (tab_general, tab_temp, tab_soiltemp, tab_precip, tab_wind,
- tab_solar, tab_agri, tab_climate, tab_download, tab_help) = st.tabs([
+ tab_solar, tab_agri, tab_climate, tab_custom, tab_download, tab_help) = st.tabs([
     "📊 종합 분석",
     "🌡️ 기온 분석",
     "🌡️ 지중온도 분석",
@@ -347,6 +348,7 @@ st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/r
     "☀️ 태양광 분석",
     "🌱 농업기상 분석",
     "📈 기후변화 분석",
+    "🔧 맞춤 분석",
     "⬇️ 보고서 다운로드",
     "ℹ️ 사용 방법",
 ])
@@ -1084,8 +1086,14 @@ with tab_climate:
     else:
         analysis_climate.render(filtered_df)
 
+with tab_custom:
+    if filtered_df is None:
+        st.info("먼저 데이터를 업로드하세요.")
+    else:
+        analysis_custom.render(filtered_df)
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB8 — 보고서 다운로드
+# TAB9 — 보고서 다운로드
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 with tab_download:
