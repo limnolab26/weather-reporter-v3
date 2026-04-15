@@ -479,6 +479,8 @@ def _tab_gdd(df: pd.DataFrame) -> None:
     annual_gdd.columns = ["연도", gdd_col]
 
     st.dataframe(annual_gdd, use_container_width=True, height=300)
+    _csv = annual_gdd.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", _csv, "annual_gdd.csv", "text/csv", key="agri_gdd_csv")
 
     fig = px.bar(
         annual_gdd, x="연도", y=gdd_col,
@@ -536,6 +538,8 @@ def _tab_gdd(df: pd.DataFrame) -> None:
                         평균="mean", 최대="max", 최소="min"
                     ).round(1).reset_index()
                     st.dataframe(summary, use_container_width=True)
+                    _csv = summary.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
+                    st.download_button("⬇️ CSV 다운로드", _csv, "ffp_summary.csv", "text/csv", key="agri_ffp_sum_csv")
 
                 # 연도별 막대 차트 (관측소별 색 구분)
                 st.markdown("##### 연도별 무상기간")
@@ -578,6 +582,8 @@ def _tab_gdd(df: pd.DataFrame) -> None:
                     use_container_width=True,
                     height=300
                 )
+                _csv = ffp_df.sort_values(["관측소", "연도"]).to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+                st.download_button("⬇️ CSV 다운로드", _csv, "ffp_detail.csv", "text/csv", key="agri_ffp_det_csv")
 
 
 def _tab_soil_water(df: pd.DataFrame) -> None:
@@ -707,6 +713,8 @@ def _tab_soil_temp(df: pd.DataFrame) -> None:
     monthly_profile.columns = list(available.keys())[:len(monthly_profile.columns)]
 
     st.dataframe(monthly_profile, use_container_width=True)
+    _csv = monthly_profile.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", _csv, "monthly_profile.csv", "text/csv", key="agri_monthly_csv")
 
 
 def _tab_par(df: pd.DataFrame) -> None:
@@ -765,6 +773,8 @@ def _tab_par(df: pd.DataFrame) -> None:
     annual_par.columns = ["연도", "연간PAR(mol/m²)", "GPP(gC/m²/yr)", "GPP(tC/ha/yr)"]
 
     st.dataframe(annual_par, use_container_width=True)
+    _csv = annual_par.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", _csv, "annual_par.csv", "text/csv", key="agri_par_csv")
 
     fig2 = px.bar(
         annual_par, x="연도", y="GPP(gC/m²/yr)",

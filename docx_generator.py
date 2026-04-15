@@ -676,9 +676,27 @@ class DocxReportGenerator:
         buf.seek(0)
         return buf.read()
 
-    def generate_filename(self) -> str:
+    def generate_filename(self, df=None) -> str:
+        """파일명: 지점_지점명_시작일(YYMM)_마지막일(YYMM)_기상보고서_작성일자.docx"""
+        import pandas as _pd
         today = datetime.now().strftime("%Y%m%d")
-        return f"기상분석보고서_{today}.docx"
+        if df is not None and not df.empty:
+            try:
+                code = ""
+                if "station_code" in df.columns:
+                    code = str(int(df["station_code"].dropna().iloc[0]))
+                name = ""
+                if "station_name" in df.columns:
+                    name = str(df["station_name"].dropna().iloc[0])
+                dates = _pd.to_datetime(df["date"]) if "date" in df.columns else None
+                start = dates.min().strftime("%y%m") if dates is not None else ""
+                end   = dates.max().strftime("%y%m") if dates is not None else ""
+                parts = [p for p in [code, name, start, end] if p]
+                prefix = "_".join(parts) if parts else "기상보고서"
+                return f"{prefix}_기상보고서_{today}.docx"
+            except Exception:
+                pass
+        return f"기상보고서_{today}.docx"
 
     # ── 섹션별 작성 메서드 ────────────────────────────────
 

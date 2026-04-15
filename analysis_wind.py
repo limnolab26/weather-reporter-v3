@@ -252,6 +252,8 @@ def _tab_wind_trend(df: pd.DataFrame) -> None:
     if summary_rows:
         summary_df = pd.DataFrame(summary_rows)
         st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        _csv = summary_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+        st.download_button("⬇️ CSV 다운로드", _csv, "wind_summary.csv", "text/csv", key="wind_sum_csv")
 
     # 4) 참고 안내
     st.info(

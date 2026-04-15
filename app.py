@@ -733,7 +733,7 @@ with tab_download:
                     progress_bar.empty()
                     st.download_button(
                         "⬇️ Excel 다운로드", excel_bytes,
-                        gen.generate_filename(),
+                        gen.generate_filename(df=st.session_state.df),
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         key="excel_dl"
                     )
@@ -757,7 +757,7 @@ with tab_download:
                         )
                     st.download_button(
                         "⬇️ DOCX 다운로드", docx_bytes,
-                        docx_gen.generate_filename(),
+                        docx_gen.generate_filename(df=st.session_state.df),
                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key="docx_dl"
                     )

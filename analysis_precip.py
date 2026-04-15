@@ -215,6 +215,8 @@ def _tab_spi(df: pd.DataFrame) -> None:
         st.markdown("#### 가뭄 통계 요약")
         stats_df = pd.DataFrame(stats_rows)
         st.dataframe(stats_df, use_container_width=True)
+        _csv = stats_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+        st.download_button("⬇️ CSV 다운로드", _csv, "spi_stats.csv", "text/csv", key="precip_spi_csv")
 
     # SPI 분류 기준 안내
     with st.expander("SPI 분류 기준"):
@@ -334,6 +336,8 @@ def _tab_intensity(df: pd.DataFrame) -> None:
     st.caption("강우강도 카테고리별 요약 통계 (단위: 일)")
     summary = intensity_df[category_cols].describe().round(1)
     st.dataframe(summary, use_container_width=True)
+    _csv = summary.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", _csv, "intensity_summary.csv", "text/csv", key="precip_int_csv")
 
 
 # ── Sub-tab 3: 연속 무강수일 ────────────────────────────────────────────────
@@ -431,6 +435,8 @@ def _tab_dry_days(df: pd.DataFrame) -> None:
             spells_df.index += 1
             st.caption("역대 Top-10 연속 무강수 구간")
             st.dataframe(spells_df, use_container_width=True)
+            _csv = spells_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+            st.download_button("⬇️ CSV 다운로드", _csv, "spells.csv", "text/csv", key="precip_spell_csv")
     else:
         st.caption("date 컬럼이 없어 Top-10 구간 표시를 건너뜁니다.")
 
@@ -844,6 +850,8 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
         .reindex(columns=[p for p in period_names if p in all_df["기간"].unique()])
     )
     st.dataframe(compare, use_container_width=True)
+    _csv = compare.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", _csv, "return_period_compare.csv", "text/csv", key="precip_ret_cmp_csv")
 
     # ── 관측소별 요약 (선택 기간 합산) ───────────────────────
     st.markdown("#### 선택 기간별 관측소 요약")
@@ -855,6 +863,8 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
         최소집중도=("집중도(%)", "min"),
     ).round(1)
     st.dataframe(summary, use_container_width=True)
+    _csv = summary.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", _csv, "return_period_summary.csv", "text/csv", key="precip_ret_sum_csv")
 
     # ── 연도별 집중도 추이 (선택 기간 모두 한 차트) ───────────
     period_label = " · ".join(selected_periods)

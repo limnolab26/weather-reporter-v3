@@ -381,6 +381,8 @@ def _render_period_comparison(df: pd.DataFrame) -> None:
 
     result_df = pd.DataFrame(rows)
     st.dataframe(result_df, use_container_width=True, hide_index=True)
+    _csv = result_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", _csv, "climate_detection.csv", "text/csv", key="climate_det_csv")
 
 
 def _build_mk_results(df: pd.DataFrame, col: str, agg: str) -> pd.DataFrame:
@@ -551,6 +553,8 @@ def _render_mk_test(df: pd.DataFrame) -> None:
         return
 
     st.dataframe(result_df, use_container_width=True, hide_index=True)
+    _csv = result_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", _csv, "mann_kendall.csv", "text/csv", key="climate_mk_csv")
 
     # 차트
     _mk_chart(df, col, agg, result_df)
@@ -611,6 +615,8 @@ def _render_climate_reference(df: pd.DataFrame) -> None:
     row_count = len(monthly)
     table_height = min(max(row_count * 38 + 60, 520), 900)
     st.dataframe(monthly, use_container_width=True, hide_index=True, height=table_height)
+    _csv = monthly.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button("⬇️ CSV 다운로드", _csv, "climate_monthly.csv", "text/csv", key="climate_monthly_csv")
 
 
 def render(df: pd.DataFrame) -> None:

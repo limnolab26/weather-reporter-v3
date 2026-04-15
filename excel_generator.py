@@ -252,9 +252,29 @@ class ExcelReportGenerator:
         _progress(1.0, "완료!")
         return output.getvalue()
 
-    def generate_filename(self, prefix="기상보고서") -> str:
+    def generate_filename(self, df=None) -> str:
+        """파일명: 지점_지점명_시작일(YYMM)_마지막일(YYMM)_기상보고서_작성일자.xlsx"""
         today = datetime.today().strftime("%Y%m%d")
-        return f"{prefix}_{today}.xlsx"
+        if df is not None and not df.empty:
+            try:
+                # 지점코드
+                code = ""
+                if "station_code" in df.columns:
+                    code = str(int(df["station_code"].dropna().iloc[0]))
+                # 지점명 (여러 관측소면 첫 번째)
+                name = ""
+                if "station_name" in df.columns:
+                    name = str(df["station_name"].dropna().iloc[0])
+                # 기간
+                dates = pd.to_datetime(df["date"]) if "date" in df.columns else None
+                start = dates.min().strftime("%y%m") if dates is not None else ""
+                end   = dates.max().strftime("%y%m") if dates is not None else ""
+                parts = [p for p in [code, name, start, end] if p]
+                prefix = "_".join(parts) if parts else "기상보고서"
+                return f"{prefix}_기상보고서_{today}.xlsx"
+            except Exception:
+                pass
+        return f"기상보고서_{today}.xlsx"
 
     # ──────────────────────────────────
     # 1. 보고서 요약 시트
