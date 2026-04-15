@@ -24,6 +24,7 @@ import analysis_solar
 import analysis_wind
 import analysis_agri
 import analysis_climate
+import analysis_soiltemp
 from chart_utils import chart_download_btn
 
 # Plotly 전역 글씨 크기 설정 (모든 그래프에 적용)
@@ -333,13 +334,14 @@ st.sidebar.link_button("⛰️ 산악기상정보시스템", "https://mtweather.
 st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/realSearch?pMENU_NO=97")
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 탭 생성 (8탭)
+# 탭 생성 (9탭)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-(tab_general, tab_temp, tab_precip, tab_wind,
+(tab_general, tab_temp, tab_soiltemp, tab_precip, tab_wind,
  tab_solar, tab_agri, tab_climate, tab_download, tab_help) = st.tabs([
     "📊 종합 분석",
     "🌡️ 기온 분석",
+    "🌡️ 지중온도 분석",
     "🌧️ 강수량 분석",
     "💨 바람 분석",
     "☀️ 태양광 분석",
@@ -1045,6 +1047,12 @@ with tab_temp:
         st.info("먼저 데이터를 업로드하세요.")
     else:
         analysis_temp.render(filtered_df)
+
+with tab_soiltemp:
+    if filtered_df is None:
+        st.info("먼저 데이터를 업로드하세요.")
+    else:
+        analysis_soiltemp.render(filtered_df)
 
 with tab_precip:
     if filtered_df is None:

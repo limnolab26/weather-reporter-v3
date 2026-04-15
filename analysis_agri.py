@@ -798,3 +798,23 @@ def _tab_par(df: pd.DataFrame) -> None:
         "fAPAR·LUE는 식생 유형에 따라 조정하세요. "
         "정밀 분석에는 위성 원격탐사 데이터 병행 권장."
     )
+
+    # ── 지중온도 보조 지표 요약 (데이터 있을 때만 표시) ──────────────────────
+    _soil_cols = ["soil_temp_surface", "soil_temp_5cm", "soil_temp_10cm"]
+    if any(c in df.columns for c in _soil_cols):
+        st.divider()
+        st.markdown("### 🌡️ 지중온도 기반 농업 보조 지표")
+        st.caption("지중온도 데이터가 감지되었습니다. 상세 분석은 **[지중온도 분석]** 탭에서 확인하세요.")
+        m1, m2, m3 = st.columns(3)
+        if "soil_temp_10cm" in df.columns:
+            avg_10 = df["soil_temp_10cm"].mean()
+            m1.metric("10cm 지중온도 평균", f"{avg_10:.1f}°C",
+                      help="벼·감자 등 주요 작물 근권 기준 깊이")
+        if "soil_temp_surface" in df.columns:
+            frost_days = int((df["soil_temp_surface"] < 0).sum())
+            m2.metric("지면온도 0°C 미만 일수", f"{frost_days}일",
+                      help="월동 작물 동해 위험 지표")
+        if "soil_temp_5cm" in df.columns:
+            above_10 = int((df["soil_temp_5cm"] >= 10).sum())
+            m3.metric("5cm 지중온도 ≥10°C 일수", f"{above_10}일",
+                      help="벼·옥수수 발아 가능 온도 도달 일수")
