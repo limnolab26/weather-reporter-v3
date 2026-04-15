@@ -93,6 +93,11 @@ for key in ["df", "monthly_df", "climate_df"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
+if "_portal_shown" not in st.session_state:
+    st.session_state._portal_shown = False
+if "_portal_file_key" not in st.session_state:
+    st.session_state._portal_file_key = None
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 공통 상수
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -281,6 +286,10 @@ climate_end = st.sidebar.number_input("평년 종료연도", min_value=1950, max
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 if uploaded_files:
+    _new_file_key = tuple(sorted(f.name for f in uploaded_files))
+    if _new_file_key != st.session_state._portal_file_key:
+        st.session_state._portal_file_key = _new_file_key
+        st.session_state._portal_shown = False
     df = load_multiple_files(uploaded_files)
     if df is not None:
         st.session_state.df = df
@@ -414,6 +423,238 @@ def calculate_anomaly(df, climate_df, element):
     return merged
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 기상 현황판 헬퍼 함수
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _show_portal_animation() -> None:
+    """기상의 세계로 빨려드는 차원이동 애니메이션 (3초 후 자동 소멸)"""
+    st.markdown("""
+<style>
+#wx-portal-overlay {
+    position:fixed; top:0; left:0; width:100vw; height:100vh;
+    background:radial-gradient(ellipse at 50% 50%, #0a1628 0%, #000d1f 55%, #000000 100%);
+    z-index:99999;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    transition:opacity 0.7s ease;
+}
+#wx-portal-overlay.fade-out { opacity:0; pointer-events:none; }
+.wx-stars { position:absolute; inset:0; overflow:hidden; }
+.wx-star {
+    position:absolute; border-radius:50%; background:white;
+    animation:twinkle 2s infinite alternate;
+}
+.wx-ring {
+    width:170px; height:170px;
+    border:3px solid transparent; border-radius:50%;
+    border-top-color:#4ab3f4; border-right-color:#7dd3fc;
+    animation:spin 1.1s linear infinite;
+    position:relative;
+}
+.wx-ring::after {
+    content:''; position:absolute; inset:14px;
+    border:2px solid transparent; border-radius:50%;
+    border-bottom-color:#93c5fd; border-left-color:#bfdbfe;
+    animation:spin 0.75s linear infinite reverse;
+}
+.wx-center {
+    position:absolute;
+    font-size:3.2rem;
+    animation:pulse-glow 1.5s ease-in-out infinite;
+}
+.wx-fly {
+    position:fixed; top:50%; left:50%;
+    font-size:1.9rem; opacity:0;
+    animation:fly-out 2.4s ease-out forwards;
+}
+.wx-title {
+    color:#7dd3fc; font-size:1.55rem; font-weight:800;
+    margin-top:30px; letter-spacing:3px;
+    animation:glow-text 1.5s ease-in-out infinite alternate;
+}
+.wx-subtitle {
+    color:#93c5fd; font-size:0.9rem; margin-top:10px;
+    opacity:0.65; letter-spacing:2px;
+}
+@keyframes spin      { to { transform:rotate(360deg); } }
+@keyframes twinkle   { from { opacity:.15; } to { opacity:.9; } }
+@keyframes pulse-glow{
+    0%,100%{ transform:scale(1);   filter:drop-shadow(0 0 8px #4ab3f4); }
+    50%    { transform:scale(1.18);filter:drop-shadow(0 0 22px #7dd3fc); }
+}
+@keyframes glow-text {
+    from { text-shadow:0 0 10px #4ab3f4,0 0 24px #4ab3f4; }
+    to   { text-shadow:0 0 22px #7dd3fc,0 0 44px #93c5fd; }
+}
+@keyframes fly-out {
+    0%  { opacity:0; transform:translate(-50%,-50%) scale(.4); }
+    18% { opacity:1; transform:translate(-50%,-50%) scale(1.15); }
+    100%{ opacity:0; transform:translate(var(--fx),var(--fy)) scale(.2); }
+}
+</style>
+<div id="wx-portal-overlay">
+  <div class="wx-stars" id="wx-stars-el"></div>
+  <span class="wx-fly" style="--fx:-580px;--fy:-320px;animation-delay:.05s">🌡️</span>
+  <span class="wx-fly" style="--fx: 580px;--fy:-320px;animation-delay:.25s">🌧️</span>
+  <span class="wx-fly" style="--fx:-480px;--fy: 380px;animation-delay:.45s">☀️</span>
+  <span class="wx-fly" style="--fx: 480px;--fy: 380px;animation-delay:.15s">💨</span>
+  <span class="wx-fly" style="--fx:   0px;--fy:-460px;animation-delay:.35s">❄️</span>
+  <span class="wx-fly" style="--fx:   0px;--fy: 460px;animation-delay:.55s">🌱</span>
+  <span class="wx-fly" style="--fx:-680px;--fy:   0px;animation-delay:.10s">📈</span>
+  <span class="wx-fly" style="--fx: 680px;--fy:   0px;animation-delay:.40s">⛅</span>
+  <span class="wx-fly" style="--fx:-380px;--fy:-400px;animation-delay:.30s">🌊</span>
+  <span class="wx-fly" style="--fx: 380px;--fy:-400px;animation-delay:.20s">🌪️</span>
+  <span class="wx-fly" style="--fx:-380px;--fy: 400px;animation-delay:.50s">🌈</span>
+  <span class="wx-fly" style="--fx: 380px;--fy: 400px;animation-delay:.00s">⚡</span>
+  <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+    <div class="wx-ring"></div>
+    <span class="wx-center">🌦️</span>
+  </div>
+  <div class="wx-title">기상의 세계로...</div>
+  <div class="wx-subtitle">데이터를 분석하고 있습니다</div>
+</div>
+<script>
+(function(){
+  var c=document.getElementById('wx-stars-el');
+  if(!c) return;
+  for(var i=0;i<90;i++){
+    var s=document.createElement('div');
+    s.className='wx-star';
+    s.style.left=Math.random()*100+'%';
+    s.style.top=Math.random()*100+'%';
+    var sz=(1+Math.random()*2.5)+'px';
+    s.style.width=sz; s.style.height=sz;
+    s.style.animationDelay=Math.random()*2+'s';
+    s.style.animationDuration=(1+Math.random()*2)+'s';
+    c.appendChild(s);
+  }
+  setTimeout(function(){
+    var el=document.getElementById('wx-portal-overlay');
+    if(el){ el.classList.add('fade-out');
+      setTimeout(function(){ if(el&&el.parentNode) el.parentNode.removeChild(el); },800);
+    }
+  },3000);
+})();
+</script>
+""", unsafe_allow_html=True)
+
+
+def _render_weather_dashboard(filtered_df: pd.DataFrame) -> None:
+    """기상 현황판 — 관측 정보 배너 + 핵심 지표 카드 + 연도별 추이"""
+
+    stations  = sorted(filtered_df["station_name"].unique())
+    min_date  = filtered_df["date"].min()
+    max_date  = filtered_df["date"].max()
+    obs_years = max_date.year - min_date.year + 1
+    period_str = f"{min_date.strftime('%Y.%m.%d')} ~ {max_date.strftime('%Y.%m.%d')}"
+    stn_str    = " &nbsp;·&nbsp; ".join(stations)
+
+    # ── 요약 배너 ───────────────────────────────────────────
+    st.markdown(f"""
+<div style="background:linear-gradient(90deg,#0f3460,#1a5276,#1a7a5e);
+     border-radius:12px;padding:16px 28px;margin-bottom:22px;
+     display:flex;align-items:center;gap:36px;flex-wrap:wrap;color:white;
+     box-shadow:0 4px 16px rgba(0,0,0,0.12);">
+  <span>📍 <b style="font-size:1.05rem">{stn_str}</b></span>
+  <span>📅 {period_str} &nbsp;<span style="color:#7dd3fc">({obs_years}년간)</span></span>
+  <span>📊 총 <b>{len(filtered_df):,}</b>건 관측자료</span>
+</div>""", unsafe_allow_html=True)
+
+    # ── 지표 카드 ────────────────────────────────────────────
+    CARD_COLORS = ["#1a4a7a","#7a1a1a","#1a6a4a","#4a1a7a",
+                   "#7a4a0a","#1a5a7a","#4a4a0a","#1a3a6a"]
+
+    def card(icon, label, val, unit, color, note=""):
+        note_html = f'<div style="font-size:.78rem;color:#94a3b8;margin-top:3px">{note}</div>' if note else ""
+        return f"""<div style="background:linear-gradient(135deg,{color}ee,{color}88);
+  border-radius:12px;padding:18px 16px;text-align:center;
+  border:1px solid rgba(255,255,255,0.1);
+  box-shadow:0 4px 14px rgba(0,0,0,0.1);">
+  <div style="font-size:1.9rem;margin-bottom:5px">{icon}</div>
+  <div style="font-size:.8rem;color:#94a3b8;margin-bottom:3px">{label}</div>
+  <div style="font-size:1.45rem;font-weight:800;color:white">{val}
+    <span style="font-size:.85rem;font-weight:400;color:#cbd5e1">{unit}</span>
+  </div>{note_html}
+</div>"""
+
+    cards = []
+    df = filtered_df
+
+    if "temp_avg" in df.columns:
+        v = df["temp_avg"].mean()
+        cards.append(card("🌡️","평균기온",f"{v:.1f}","°C",CARD_COLORS[0]))
+    if "temp_max" in df.columns:
+        v  = df["temp_max"].mean()
+        mx = df["temp_max"].max()
+        cards.append(card("🔴","평균최고기온",f"{v:.1f}","°C",CARD_COLORS[1],f"역대 최고 {mx:.1f}°C"))
+    if "temp_min" in df.columns:
+        v  = df["temp_min"].mean()
+        mn = df["temp_min"].min()
+        cards.append(card("🔵","평균최저기온",f"{v:.1f}","°C",CARD_COLORS[3],f"역대 최저 {mn:.1f}°C"))
+    if "precipitation" in df.columns:
+        ann = df.groupby(["station_name","year"])["precipitation"].sum().mean()
+        cards.append(card("🌧️","연평균강수량",f"{ann:.0f}","mm",CARD_COLORS[2]))
+    if "wind_speed" in df.columns:
+        v  = df["wind_speed"].mean()
+        mx_w = df["wind_gust"].max() if "wind_gust" in df.columns else df["wind_speed"].max()
+        cards.append(card("💨","평균풍속",f"{v:.1f}","m/s",CARD_COLORS[4],f"최대순간 {mx_w:.1f} m/s"))
+    if "sunshine" in df.columns:
+        ann = df.groupby(["station_name","year"])["sunshine"].sum().mean()
+        cards.append(card("☀️","연평균일조",f"{ann:.0f}","hr",CARD_COLORS[5]))
+    if "humidity" in df.columns:
+        v = df["humidity"].mean()
+        cards.append(card("💧","평균습도",f"{v:.0f}","%",CARD_COLORS[6]))
+    if "solar_rad" in df.columns:
+        ann = df.groupby(["station_name","year"])["solar_rad"].sum().mean()
+        cards.append(card("⚡","연평균일사량",f"{ann:.0f}","MJ/m²",CARD_COLORS[7]))
+
+    if cards:
+        n_col = min(len(cards), 4)
+        for i in range(0, len(cards), n_col):
+            row_cards = cards[i:i+n_col]
+            cols = st.columns(len(row_cards))
+            for col, ch in zip(cols, row_cards):
+                col.markdown(ch, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── 연도별 추이 ──────────────────────────────────────────
+    has_temp   = "temp_avg"       in df.columns
+    has_precip = "precipitation"  in df.columns
+
+    if has_temp or has_precip:
+        st.markdown("#### 📈 연도별 추이")
+        if has_temp and has_precip:
+            c_l, c_r = st.columns(2)
+        else:
+            c_l = st.columns(1)[0]
+            c_r = None
+
+        if has_temp:
+            yt = df.groupby(["station_name","year"])["temp_avg"].mean().reset_index()
+            ft = px.line(yt, x="year", y="temp_avg", color="station_name", markers=True,
+                         labels={"year":"연도","temp_avg":"평균기온 (°C)","station_name":"관측소"},
+                         title="연도별 평균기온")
+            ft.update_layout(height=290, margin=dict(t=42,b=10,l=0,r=0),
+                             legend=dict(orientation="h",y=-0.28))
+            with c_l:
+                st.plotly_chart(ft, use_container_width=True)
+
+        if has_precip:
+            yp = df.groupby(["station_name","year"])["precipitation"].sum().reset_index()
+            fp = px.bar(yp, x="year", y="precipitation", color="station_name", barmode="group",
+                        labels={"year":"연도","precipitation":"강수량 (mm)","station_name":"관측소"},
+                        title="연도별 강수량")
+            fp.update_layout(height=290, margin=dict(t=42,b=10,l=0,r=0),
+                             legend=dict(orientation="h",y=-0.28))
+            with (c_r if c_r else c_l):
+                st.plotly_chart(fp, use_container_width=True)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TAB1 — 종합 분석
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 with tab_general:
     if filtered_df is None:
         st.markdown("""
@@ -507,9 +748,18 @@ with tab_general:
 </div>
 """, unsafe_allow_html=True)
     else:
-        gen_t1, gen_t2, gen_t3, gen_t4 = st.tabs(["📊 대화형 차트", "📆 평년 분석", "📅 월평균 분석", "📅 연평균 분석"])
+        # 새 데이터 업로드 직후 1회만 차원이동 애니메이션 표시
+        if not st.session_state._portal_shown:
+            st.session_state._portal_shown = True
+            _show_portal_animation()
 
-        # ── 대화형 차트 ──
+        gen_t0, gen_t1, gen_t2, gen_t3, gen_t4 = st.tabs([
+            "🌐 기상 현황판", "📊 대화형 차트", "📆 평년 분석", "📅 월평균 분석", "📅 연평균 분석"
+        ])
+
+        with gen_t0:
+            _render_weather_dashboard(filtered_df)
+
         with gen_t1:
             st.subheader("📊 대화형 차트")
             col1, col2, col3, col4 = st.columns(4)
