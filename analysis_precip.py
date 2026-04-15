@@ -208,14 +208,14 @@ def _tab_spi(df: pd.DataFrame) -> None:
                 continue
 
             fig = _draw_spi_chart(spi, stn, scale)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             stats_rows.append(_spi_drought_stats(spi, stn, scale))
 
     # 가뭄 통계 요약 테이블
     if stats_rows:
         st.markdown("#### 가뭄 통계 요약")
         stats_df = pd.DataFrame(stats_rows)
-        st.dataframe(stats_df, use_container_width=True)
+        st.dataframe(stats_df, width='stretch')
         _csv = stats_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
         st.download_button("⬇️ CSV 다운로드", _csv, "spi_stats.csv", "text/csv", key="precip_spi_csv")
 
@@ -266,7 +266,7 @@ def _tab_annual_precip(df: pd.DataFrame) -> None:
         annotation_text=f"전체 평균 {overall_mean:.0f}mm",
         annotation_position="top left",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="precip_annual_bar_chart", filename="annual_precipitation")
 
 
@@ -332,12 +332,12 @@ def _tab_intensity(df: pd.DataFrame) -> None:
         height=400,
         legend={"orientation": "h", "yanchor": "bottom", "y": -0.3},
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # 요약 통계표
     st.caption("강우강도 카테고리별 요약 통계 (단위: 일)")
     summary = intensity_df[category_cols].describe().round(1)
-    st.dataframe(summary, use_container_width=True)
+    st.dataframe(summary, width='stretch')
     _csv = summary.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", _csv, "intensity_summary.csv", "text/csv", key="precip_int_csv")
 
@@ -422,7 +422,7 @@ def _tab_dry_days(df: pd.DataFrame) -> None:
         labels={"year": "연도", "최대연속무강수일": "연속 무강수일 (일)"},
         color_discrete_sequence=["#4A90D9"],
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # Top-10 긴 건조 구간
     if "date" in s_df.columns:
@@ -436,7 +436,7 @@ def _tab_dry_days(df: pd.DataFrame) -> None:
             )
             spells_df.index += 1
             st.caption("역대 Top-10 연속 무강수 구간")
-            st.dataframe(spells_df, use_container_width=True)
+            st.dataframe(spells_df, width='stretch')
             _csv = spells_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
             st.download_button("⬇️ CSV 다운로드", _csv, "spells.csv", "text/csv", key="precip_spell_csv")
     else:
@@ -483,7 +483,7 @@ def _tab_monthly_heatmap(df: pd.DataFrame) -> None:
         height=400,
     )
     fig.update_xaxes(side="bottom")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="precip_monthly_heat_chart", filename="monthly_precipitation_heatmap")
 
 
@@ -523,7 +523,7 @@ def _tab_max_daily_precip(df: pd.DataFrame) -> None:
         annotation_text="호우 기준 80mm",
         annotation_position="top left",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="precip_annual_max_chart", filename="annual_max_precipitation")
 
 
@@ -734,7 +734,7 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
     ratio = _calc_mv_ratio(df, stn)
     if not ratio.empty:
         fig_mv = _plot_mv_curves(ratio, stn)
-        st.plotly_chart(fig_mv, use_container_width=False)
+        st.plotly_chart(fig_mv, width='content')
         chart_download_btn(fig_mv, key="precip_spi_heat_chart", filename="spi_heatmap")
 
         # MV 커브 비율 테이블 (expander)
@@ -749,13 +749,15 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
             avg_row = ratio.mean().rename("전체평균")
             display_ratio.loc["전체평균"] = avg_row.values
             if len(r10) >= 3:
-                display_ratio.loc[f"최근10년평균"] = ratio.loc[r10].mean().values
+                display_ratio.loc["최근10년평균"] = ratio.loc[r10].mean().values
             if len(r30) >= 10:
-                display_ratio.loc[f"최근30년평균"] = ratio.loc[r30].mean().values
+                display_ratio.loc["최근30년평균"] = ratio.loc[r30].mean().values
             display_ratio.columns = [f"{m}월" for m in range(1, 13)]
+            # Arrow 직렬화: 인덱스를 문자열로 통일 (정수 + 문자열 혼재 방지)
+            display_ratio.index = display_ratio.index.astype(str)
             st.dataframe(
                 display_ratio.style.format("{:.3f}", na_rep="-"),
-                use_container_width=True,
+                width='stretch',
                 height=min(420, len(display_ratio) * 35 + 60),
             )
             mv_csv = display_ratio.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
@@ -780,7 +782,7 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
     pivot.loc["합계", "월평균"] = float("nan")
 
     st.markdown("#### 연도별 월별 강수량 (mm)")
-    st.dataframe(pivot.style.format("{:.1f}", na_rep="-"), use_container_width=True, height=480)
+    st.dataframe(pivot.style.format("{:.1f}", na_rep="-"), width='stretch', height=480)
 
     csv = pivot.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", csv, f"{stn}_누적강수량.csv", "text/csv", key="precip_cumul_csv")
@@ -796,7 +798,7 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
         title=f"{stn} 연도별 월별 강수량 히트맵"
     )
     fig.update_layout(height=max(350, len(hm_data) * 15 + 120))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="precip_trend_chart", filename="precipitation_trend")
 
 
@@ -855,7 +857,7 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
         .mean().round(1).unstack("기간")
         .reindex(columns=[p for p in period_names if p in all_df["기간"].unique()])
     )
-    st.dataframe(compare, use_container_width=True)
+    st.dataframe(compare, width='stretch')
     _csv = compare.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", _csv, "return_period_compare.csv", "text/csv", key="precip_ret_cmp_csv")
 
@@ -868,7 +870,7 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
         최대집중도=("집중도(%)", "max"),
         최소집중도=("집중도(%)", "min"),
     ).round(1)
-    st.dataframe(summary, use_container_width=True)
+    st.dataframe(summary, width='stretch')
     _csv = summary.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", _csv, "return_period_summary.csv", "text/csv", key="precip_ret_sum_csv")
 
@@ -916,7 +918,7 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
 
     fig.update_layout(height=420,
                       legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="precip_seasonal_chart", filename="seasonal_precipitation")
 
     # ── 기간별 산점도 (연강수량 vs 기간강수량) ────────────────
@@ -947,7 +949,7 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
                 ))
         fig_sc.update_layout(height=340, showlegend=(len(selected_periods) == 1))
         with cols[ci % n_cols]:
-            st.plotly_chart(fig_sc, use_container_width=True)
+            st.plotly_chart(fig_sc, width='stretch')
             chart_download_btn(fig_sc, key=f"precip_scatter_chart_{ci}", filename=f"precipitation_scatter_{ci}")
 
     csv = show_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
@@ -1004,7 +1006,7 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
     tbl = pd.DataFrame(records)
 
     st.markdown("#### 연도별 강우일수 통계표")
-    st.dataframe(tbl, use_container_width=True, height=440)
+    st.dataframe(tbl, width='stretch', height=440)
 
     csv = tbl.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", csv, "강우일수분석.csv", "text/csv", key="raindays_csv")
@@ -1031,7 +1033,7 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
             annotation_position="top right",
         )
     fig_trend.update_layout(height=420)
-    st.plotly_chart(fig_trend, use_container_width=True)
+    st.plotly_chart(fig_trend, width='stretch')
     chart_download_btn(fig_trend, key="precip_trend2_chart", filename="precipitation_trend2")
 
     # ── 단일 관측소 상세 막대 ──
@@ -1054,7 +1056,7 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
         color_discrete_sequence=["#3498db"]
     )
     fig.update_layout(height=380)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="precip_monthly_chart", filename="monthly_precip_chart")
 
     # 강우강도 스택 막대
@@ -1068,5 +1070,5 @@ def _tab_rain_days(df: pd.DataFrame) -> None:
             name=col, marker_color=color
         ))
     fig2.update_layout(barmode="stack", height=380, xaxis_title="연도", yaxis_title="일수")
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width='stretch')
     chart_download_btn(fig2, key="precip_compare_chart", filename="precipitation_compare")

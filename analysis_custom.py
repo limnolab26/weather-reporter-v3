@@ -294,13 +294,13 @@ def _tab_chart_builder(df: pd.DataFrame) -> None:
         )
 
     if fig is not None:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         chart_download_btn(fig, key="cst_chart_dl", filename="custom_chart")
 
         # 집계 결과 데이터 표시 및 CSV 다운로드
         with st.expander("📋 집계 데이터 보기 / 다운로드", expanded=False):
             display_df = agg_df.rename(columns=y_rename)
-            st.dataframe(display_df, use_container_width=True)
+            st.dataframe(display_df, width='stretch')
             st.download_button(
                 label="CSV 다운로드",
                 data=_csv_bytes(display_df),
@@ -419,10 +419,14 @@ def _tab_pivot_builder(df: pd.DataFrame) -> None:
     # 행/열 합계 옵션
     show_total = st.checkbox("행·열 합계 추가", value=False, key="cst_pivot_total")
     if show_total:
-        pivot.loc["합계"] = pivot.sum()
-        pivot["합계"] = pivot.sum(axis=1)
+        # Arrow 직렬화: 인덱스를 문자열로 통일 후 합계 행 추가
+        pivot.index = pivot.index.astype(str)
+        pivot.loc["합계"] = pivot.sum(numeric_only=True)
+        pivot["합계"] = pivot.sum(axis=1, numeric_only=True)
+    else:
+        pivot.index = pivot.index.astype(str)
 
-    st.dataframe(pivot, use_container_width=True)
+    st.dataframe(pivot, width='stretch')
 
     # CSV 다운로드
     st.download_button(
@@ -445,7 +449,7 @@ def _tab_pivot_builder(df: pd.DataFrame) -> None:
             aspect="auto",
             height=max(300, len(display_pivot) * 28 + 120),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         chart_download_btn(fig, key="cst_pivot_heatmap_dl", filename="pivot_heatmap")
 
 

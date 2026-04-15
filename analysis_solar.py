@@ -105,7 +105,7 @@ def _tab_monthly_solar(df: pd.DataFrame) -> None:
     fig.update_yaxes(title_text="일사량 (MJ/m²)", secondary_y=False)
     fig.update_yaxes(title_text="일조시간 (hr)", secondary_y=True)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="solar_monthly_chart", filename="monthly_solar_sunshine")
 
 
@@ -188,7 +188,7 @@ def _tab_annual_trend(df: pd.DataFrame) -> None:
     fig.update_yaxes(title_text="일사량 합계 (MJ/m²)", secondary_y=False)
     fig.update_yaxes(title_text="일조시간 합계 (hr)", secondary_y=True)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="solar_annual_chart", filename="annual_solar_sunshine")
 
 
@@ -227,7 +227,7 @@ def _tab_seasonal(df: pd.DataFrame) -> None:
         height=CHART_HEIGHT,
     )
     fig.update_layout(legend={"orientation": "h", "y": -0.2})
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="solar_seasonal_chart", filename="seasonal_solar_boxplot")
 
 
@@ -271,7 +271,7 @@ def _tab_cloud(df: pd.DataFrame) -> None:
         markers=True,
     )
     fig_line.update_layout(legend={"orientation": "h", "y": -0.2})
-    st.plotly_chart(fig_line, use_container_width=True)
+    st.plotly_chart(fig_line, width='stretch')
     chart_download_btn(fig_line, key="solar_cloud_trend_chart", filename="annual_cloud_cover")
 
     # 운량 등급 분류 (10분위 기준)
@@ -322,7 +322,7 @@ def _tab_cloud(df: pd.DataFrame) -> None:
         height=CHART_HEIGHT,
         legend={"orientation": "h", "y": -0.2},
     )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar, width='stretch')
     chart_download_btn(fig_bar, key="solar_cloud_class_chart", filename="cloud_classification")
 
 
@@ -374,7 +374,7 @@ def _tab_sunshine_ratio(df: pd.DataFrame) -> None:
         xaxis={"tickvals": list(range(1, 13))},
         legend={"orientation": "h", "y": -0.2},
     )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar, width='stretch')
     chart_download_btn(fig_bar, key="solar_monthly_ratio_chart", filename="monthly_sunshine_ratio")
 
     # 연간 일조율 추이
@@ -393,7 +393,7 @@ def _tab_sunshine_ratio(df: pd.DataFrame) -> None:
         markers=True,
     )
     fig_line.update_layout(legend={"orientation": "h", "y": -0.2})
-    st.plotly_chart(fig_line, use_container_width=True)
+    st.plotly_chart(fig_line, width='stretch')
     chart_download_btn(fig_line, key="solar_annual_ratio_chart", filename="annual_sunshine_ratio")
 
 

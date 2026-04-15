@@ -152,7 +152,7 @@ def _tab_wind_trend(df: pd.DataFrame) -> None:
         height=CHART_HEIGHT,
         legend={"orientation": "h", "y": -0.25},
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="wind_speed_trend_chart", filename="wind_speed_trend")
 
     # ── 풍력에너지 밀도 섹션 ──────────────────────────────────────
@@ -200,7 +200,7 @@ def _tab_wind_trend(df: pd.DataFrame) -> None:
         height=CHART_HEIGHT,
         legend={"orientation": "h", "y": -0.2},
     )
-    st.plotly_chart(fig_wpd, use_container_width=True)
+    st.plotly_chart(fig_wpd, width='stretch')
 
     # 2) 월별 풍력에너지 밀도 히트맵 (선택적)
     show_heatmap = st.checkbox("월별 풍력에너지 밀도 히트맵 표시", key="wpd_heatmap_toggle")
@@ -234,7 +234,7 @@ def _tab_wind_trend(df: pd.DataFrame) -> None:
                 yaxis={"title": "월"},
                 height=CHART_HEIGHT,
             )
-            st.plotly_chart(fig_heat, use_container_width=True)
+            st.plotly_chart(fig_heat, width='stretch')
             chart_download_btn(fig_heat, key="wind_wpd_heat_chart", filename="wind_power_density_heatmap")
 
     # 3) 풍력에너지 밀도 통계 요약 테이블
@@ -254,7 +254,7 @@ def _tab_wind_trend(df: pd.DataFrame) -> None:
 
     if summary_rows:
         summary_df = pd.DataFrame(summary_rows)
-        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        st.dataframe(summary_df, width='stretch', hide_index=True)
         _csv = summary_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
         st.download_button("⬇️ CSV 다운로드", _csv, "wind_summary.csv", "text/csv", key="wind_sum_csv")
 
@@ -328,7 +328,7 @@ def _tab_wind_rose(df: pd.DataFrame) -> None:
         },
         height=CHART_HEIGHT,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="wind_rose_chart", filename="wind_direction_rose")
 
 
@@ -423,7 +423,7 @@ def _tab_weibull(df: pd.DataFrame) -> None:
         height=CHART_HEIGHT,
         legend={"orientation": "h", "y": -0.2},
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="wind_hist_chart", filename="wind_speed_distribution")
 
 
@@ -495,7 +495,7 @@ def _tab_wind_class(df: pd.DataFrame) -> None:
         height=CHART_HEIGHT,
         legend={"orientation": "h", "y": -0.2},
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="wind_class_chart", filename="wind_speed_classes")
 
 
@@ -570,7 +570,7 @@ def _tab_pressure(df: pd.DataFrame) -> None:
         height=CHART_HEIGHT,
         legend={"orientation": "h", "y": -0.25},
     )
-    st.plotly_chart(fig_monthly, use_container_width=True)
+    st.plotly_chart(fig_monthly, width='stretch')
     chart_download_btn(fig_monthly, key="wind_pressure_monthly_chart", filename="monthly_pressure")
 
     # 연간 기압 추이 + 회귀선
@@ -620,7 +620,7 @@ def _tab_pressure(df: pd.DataFrame) -> None:
         height=CHART_HEIGHT,
         legend={"orientation": "h", "y": -0.2},
     )
-    st.plotly_chart(fig_annual, use_container_width=True)
+    st.plotly_chart(fig_annual, width='stretch')
     chart_download_btn(fig_annual, key="wind_pressure_annual_chart", filename="annual_pressure_trend")
 
 

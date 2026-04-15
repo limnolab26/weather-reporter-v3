@@ -163,7 +163,7 @@ def _tab_depth_heatmap(df):
         height=420,
         yaxis={"autorange": "reversed"},
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="soil_heatmap_chart", filename="soil_depth_time_heatmap")
 
 
@@ -225,7 +225,7 @@ def _tab_vertical_profile(df):
         height=450,
         legend={"orientation": "h", "yanchor": "bottom", "y": -0.3},
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="soil_profile_chart", filename="soil_vertical_profile")
 
 
@@ -270,7 +270,7 @@ def _tab_timeseries(df):
         height=400,
     )
     fig.update_traces(line={"width": 1.2})
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="soil_ts_chart", filename="soil_temperature_timeseries")
 
 
@@ -326,10 +326,10 @@ def _tab_phase_lag(df):
     )
     fig.update_traces(texttemplate="%{text}일", textposition="outside")
     fig.update_layout(yaxis={"categoryorder": "total ascending"})
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="soil_phaselag_chart", filename="soil_phase_lag")
 
-    st.dataframe(lag_df[["깊이", "평균 지연 일수"]], use_container_width=True)
+    st.dataframe(lag_df[["깊이", "평균 지연 일수"]], width='stretch')
     st.download_button(
         label="CSV 다운로드",
         data=_csv_bytes(lag_df[["깊이", "평균 지연 일수"]]),
@@ -373,7 +373,7 @@ def _tab_stats_table(df):
 
     if period_unit == "전체 기간":
         result = make_stats(df)
-        st.dataframe(result, use_container_width=True)
+        st.dataframe(result, width='stretch')
         st.download_button(
             label="CSV 다운로드",
             data=_csv_bytes(result.reset_index().rename(columns={"index": "깊이"})),
@@ -383,15 +383,15 @@ def _tab_stats_table(df):
     elif period_unit == "연별":
         for year, ydf in df.groupby("year"):
             st.markdown(f"**{year}년**")
-            st.dataframe(make_stats(ydf), use_container_width=True)
+            st.dataframe(make_stats(ydf), width='stretch')
     elif period_unit == "월별":
         for month, mdf in df.groupby("month"):
             st.markdown(f"**{month}월**")
-            st.dataframe(make_stats(mdf), use_container_width=True)
+            st.dataframe(make_stats(mdf), width='stretch')
     else:  # 계절별
         for season, sdf in df.groupby("season"):
             st.markdown(f"**{season}**")
-            st.dataframe(make_stats(sdf), use_container_width=True)
+            st.dataframe(make_stats(sdf), width='stretch')
 
 
 # ──────────────────────────────────────────────────────────────
@@ -426,7 +426,7 @@ def _tab_climate(df):
             )
             fig_amp.add_hline(y=2, line_dash="dash", line_color="blue",
                               annotation_text="항온층 기준(2°C)")
-            st.plotly_chart(fig_amp, use_container_width=True)
+            st.plotly_chart(fig_amp, width='stretch')
             chart_download_btn(fig_amp, key="soil_amplitude_chart", filename="soil_amplitude")
 
     with col2:
@@ -469,9 +469,9 @@ def _tab_climate(df):
                 color_continuous_scale="RdBu_r",
                 color_continuous_midpoint=0,
             )
-            st.plotly_chart(fig_trend, use_container_width=True)
+            st.plotly_chart(fig_trend, width='stretch')
             chart_download_btn(fig_trend, key="soil_trend_chart", filename="soil_trend")
-            st.dataframe(trend_df, use_container_width=True)
+            st.dataframe(trend_df, width='stretch')
             st.download_button(
                 label="CSV 다운로드",
                 data=_csv_bytes(trend_df),
@@ -544,7 +544,7 @@ def _tab_energy(df):
             title=f"기온 vs 지중온도 {cmp_col_label} 비교",
             height=380,
         )
-        st.plotly_chart(fig_cmp, use_container_width=True)
+        st.plotly_chart(fig_cmp, width='stretch')
         chart_download_btn(fig_cmp, key="soil_energy_cmp_chart", filename="soil_energy_comparison")
 
 
@@ -614,7 +614,7 @@ def _tab_agri(df):
             "5일 연속 유지 시작일": sowing_date.strftime("%m-%d") if sowing_date else "-",
         })
     sowing_df = pd.DataFrame(sowing_rows)
-    st.dataframe(sowing_df, use_container_width=True)
+    st.dataframe(sowing_df, width='stretch')
     st.download_button(
         label="CSV 다운로드",
         data=_csv_bytes(sowing_df),
@@ -645,7 +645,7 @@ def _tab_agri(df):
         height=400,
         legend={"orientation": "h", "yanchor": "bottom", "y": -0.35},
     )
-    st.plotly_chart(fig_gdd, use_container_width=True)
+    st.plotly_chart(fig_gdd, width='stretch')
     chart_download_btn(fig_gdd, key="soil_sgdd_chart", filename="soil_sgdd_cumulative")
 
     # 동결 분석
@@ -666,7 +666,7 @@ def _tab_agri(df):
                 "지면온도 최저(°C)": round(min_temp, 1) if pd.notna(min_temp) else "-",
             })
         frost_df = pd.DataFrame(frost_rows)
-        st.dataframe(frost_df, use_container_width=True)
+        st.dataframe(frost_df, width='stretch')
         st.download_button(
             label="CSV 다운로드",
             data=_csv_bytes(frost_df),

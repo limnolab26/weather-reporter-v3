@@ -188,7 +188,7 @@ def _render_temp_trend(df: pd.DataFrame) -> None:
         height=420,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="climate_annual_temp_chart", filename="annual_temperature_trend")
 
     if slope_records:
@@ -268,7 +268,7 @@ def _render_precip_trend(df: pd.DataFrame) -> None:
         height=420,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="climate_annual_precip_chart", filename="annual_precipitation_trend")
 
     if slope_records:
@@ -383,7 +383,7 @@ def _render_period_comparison(df: pd.DataFrame) -> None:
         return
 
     result_df = pd.DataFrame(rows)
-    st.dataframe(result_df, use_container_width=True, hide_index=True)
+    st.dataframe(result_df, width='stretch', hide_index=True)
     _csv = result_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", _csv, "climate_detection.csv", "text/csv", key="climate_det_csv")
 
@@ -514,7 +514,7 @@ def _mk_chart(df: pd.DataFrame, col: str, agg: str, result_df: pd.DataFrame) -> 
         height=380,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def _render_mk_test(df: pd.DataFrame) -> None:
@@ -555,7 +555,7 @@ def _render_mk_test(df: pd.DataFrame) -> None:
         st.warning("검정 결과를 계산할 수 없습니다. 데이터를 확인하세요.")
         return
 
-    st.dataframe(result_df, use_container_width=True, hide_index=True)
+    st.dataframe(result_df, width='stretch', hide_index=True)
     _csv = result_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", _csv, "mann_kendall.csv", "text/csv", key="climate_mk_csv")
 
@@ -617,7 +617,7 @@ def _render_climate_reference(df: pd.DataFrame) -> None:
     # 12월까지 스크롤 없이 한 번에 보이도록 충분한 높이 설정
     row_count = len(monthly)
     table_height = min(max(row_count * 38 + 60, 520), 900)
-    st.dataframe(monthly, use_container_width=True, hide_index=True, height=table_height)
+    st.dataframe(monthly, width='stretch', hide_index=True, height=table_height)
     _csv = monthly.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", _csv, "climate_monthly.csv", "text/csv", key="climate_monthly_csv")
 

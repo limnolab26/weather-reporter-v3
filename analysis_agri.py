@@ -268,7 +268,7 @@ def _tab_special_days(df: pd.DataFrame) -> None:
         return
 
     tbl = pd.DataFrame(records)
-    st.dataframe(tbl, use_container_width=True, height=420)
+    st.dataframe(tbl, width='stretch', height=420)
 
     csv = tbl.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", csv, "농업기상_특이일수.csv", "text/csv", key="agri_special_csv")
@@ -287,7 +287,7 @@ def _tab_special_days(df: pd.DataFrame) -> None:
             color_discrete_sequence=["#27ae60"]
         )
         fig.update_layout(height=380)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 
 def _tab_et0(df: pd.DataFrame) -> None:
@@ -387,7 +387,7 @@ def _tab_et0(df: pd.DataFrame) -> None:
                 yaxis_title="ET₀ (mm/년)",
                 title=f"{stn} 연별 ET₀ — 방법 비교"
             )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         chart_download_btn(fig, key="agri_et0_cmp_chart", filename="et0_comparison")
     else:
         # 단일 방법 표시
@@ -410,7 +410,7 @@ def _tab_et0(df: pd.DataFrame) -> None:
                 color_discrete_sequence=["#2980b9"]
             )
         fig.update_layout(height=380)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         chart_download_btn(fig, key="agri_et0_single_chart", filename="et0_single")
 
     if method == METHOD_HS or compare_mode:
@@ -441,7 +441,7 @@ def _tab_et0(df: pd.DataFrame) -> None:
             line=dict(dash="dash")
         ))
         fig2.update_layout(height=350, yaxis_title="증발산량 (mm/월)")
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
         chart_download_btn(fig2, key="agri_et0_evap_chart", filename="et0_evaporation")
 
 
@@ -482,7 +482,7 @@ def _tab_gdd(df: pd.DataFrame) -> None:
     gdd_col = f"연간 적산온도(T_base={t_base}°C)"
     annual_gdd.columns = ["연도", gdd_col]
 
-    st.dataframe(annual_gdd, use_container_width=True, height=300)
+    st.dataframe(annual_gdd, width='stretch', height=300)
     _csv = annual_gdd.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", _csv, "annual_gdd.csv", "text/csv", key="agri_gdd_csv")
 
@@ -493,7 +493,7 @@ def _tab_gdd(df: pd.DataFrame) -> None:
         color_discrete_sequence=["#e67e22"]
     )
     fig.update_layout(height=380)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # 연도별 일별 누적 곡선
     st.markdown("#### 연도별 일별 누적 적산온도")
@@ -522,7 +522,7 @@ def _tab_gdd(df: pd.DataFrame) -> None:
             xaxis_title="일수 (Day of Year)",
             yaxis_title="누적 적산온도 (°C·day)",
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
         chart_download_btn(fig2, key="agri_gdd_cum_chart", filename="gdd_cumulative")
 
     # ── 무상기간 (Frost-Free Period) 분석 ──
@@ -542,7 +542,7 @@ def _tab_gdd(df: pd.DataFrame) -> None:
                     summary = ffp_valid.groupby("관측소")["무상기간(일)"].agg(
                         평균="mean", 최대="max", 최소="min"
                     ).round(1).reset_index()
-                    st.dataframe(summary, use_container_width=True)
+                    st.dataframe(summary, width='stretch')
                     _csv = summary.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
                     st.download_button("⬇️ CSV 다운로드", _csv, "ffp_summary.csv", "text/csv", key="agri_ffp_sum_csv")
 
@@ -578,13 +578,13 @@ def _tab_gdd(df: pd.DataFrame) -> None:
                     pass  # scipy 없으면 추세선 생략
 
                 fig3.update_layout(height=400)
-                st.plotly_chart(fig3, use_container_width=True)
+                st.plotly_chart(fig3, width='stretch')
 
                 # 상세 데이터 테이블
                 st.markdown("##### 연도별 서리 날짜 상세")
                 st.dataframe(
                     ffp_df.sort_values(["관측소", "연도"]),
-                    use_container_width=True,
+                    width='stretch',
                     height=300
                 )
                 _csv = ffp_df.sort_values(["관측소", "연도"]).to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
@@ -635,7 +635,7 @@ def _tab_soil_water(df: pd.DataFrame) -> None:
     fig.update_yaxes(title_text="강수·ET₀ (mm)", secondary_y=False)
     fig.update_yaxes(title_text="물수지 P-ET₀ (mm)", secondary_y=True)
     fig.update_layout(height=400, barmode="overlay")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="agri_swb_chart", filename="soil_water_balance")
 
     st.caption("※ 단순 수지 모델 (토양 저장 미고려). 음수=토양수분 부족, 양수=잉여.")
@@ -704,7 +704,7 @@ def _tab_soil_temp(df: pd.DataFrame) -> None:
         yaxis_title="온도 (°C)",
         legend_title="깊이"
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="agri_soil_temp_chart", filename="soil_temperature")
 
     # 연중 깊이별 분포 (특정 연도)
@@ -719,7 +719,7 @@ def _tab_soil_temp(df: pd.DataFrame) -> None:
     monthly_profile.index.name = "월"
     monthly_profile.columns = list(available.keys())[:len(monthly_profile.columns)]
 
-    st.dataframe(monthly_profile, use_container_width=True)
+    st.dataframe(monthly_profile, width='stretch')
     _csv = monthly_profile.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", _csv, "monthly_profile.csv", "text/csv", key="agri_monthly_csv")
 
@@ -759,7 +759,7 @@ def _tab_par(df: pd.DataFrame) -> None:
     fig.update_yaxes(title_text="PAR (mol/m²/월)", secondary_y=False)
     fig.update_yaxes(title_text="일사량 (MJ/m²/월)", secondary_y=True)
     fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="agri_par_chart", filename="par_values")
 
     # 일차생산량 개략 추정
@@ -780,7 +780,7 @@ def _tab_par(df: pd.DataFrame) -> None:
     annual_par["gpp_tC_ha_yr"] = (annual_par["gpp_gC_m2_yr"] / 100).round(2)
     annual_par.columns = ["연도", "연간PAR(mol/m²)", "GPP(gC/m²/yr)", "GPP(tC/ha/yr)"]
 
-    st.dataframe(annual_par, use_container_width=True)
+    st.dataframe(annual_par, width='stretch')
     _csv = annual_par.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", _csv, "annual_par.csv", "text/csv", key="agri_par_csv")
 
@@ -790,7 +790,7 @@ def _tab_par(df: pd.DataFrame) -> None:
         color_discrete_sequence=["#27ae60"]
     )
     fig2.update_layout(height=350)
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width='stretch')
     chart_download_btn(fig2, key="agri_npp_chart", filename="npp_comparison")
 
     st.caption(

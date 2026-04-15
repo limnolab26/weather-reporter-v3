@@ -674,7 +674,7 @@ def _render_weather_dashboard(filtered_df: pd.DataFrame) -> None:
             ft.update_layout(height=290, margin=dict(t=42,b=10,l=0,r=0),
                              legend=dict(orientation="h",y=-0.28))
             with c_l:
-                st.plotly_chart(ft, use_container_width=True)
+                st.plotly_chart(ft, width='stretch')
 
         if has_precip:
             yp = df.groupby(["station_name","year"])["precipitation"].sum().reset_index()
@@ -684,7 +684,7 @@ def _render_weather_dashboard(filtered_df: pd.DataFrame) -> None:
             fp.update_layout(height=290, margin=dict(t=42,b=10,l=0,r=0),
                              legend=dict(orientation="h",y=-0.28))
             with (c_r if c_r else c_l):
-                st.plotly_chart(fp, use_container_width=True)
+                st.plotly_chart(fp, width='stretch')
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -840,7 +840,7 @@ with tab_general:
                     combo_df["year"].astype(str) + "-" + combo_df["month"].astype(str) + "-01"
                 )
                 _fig_combo = create_temp_precip_combo(combo_df)
-                st.plotly_chart(_fig_combo, use_container_width=True)
+                st.plotly_chart(_fig_combo, width='stretch')
                 chart_download_btn(_fig_combo, key="app_combo_chart", filename="temp_precip_combo")
 
             elif chart_type == "비교(다중요소)":
@@ -855,7 +855,7 @@ with tab_general:
                     available_sel = [e for e in sel_elements if e in chart_df.columns]
                     if available_sel:
                         _fig_cmp = create_comparison_chart(chart_df, available_sel, el_types, freq)
-                        st.plotly_chart(_fig_cmp, use_container_width=True)
+                        st.plotly_chart(_fig_cmp, width='stretch')
                         chart_download_btn(_fig_cmp, key="app_compare_chart", filename="element_comparison")
             else:
                 for element in sel_elements:
@@ -864,7 +864,7 @@ with tab_general:
                         continue
                     el_df = prepare_chart_data(chart_df, element, freq)
                     _fig_el = create_plotly_chart(el_df, element, chart_type)
-                    st.plotly_chart(_fig_el, use_container_width=True)
+                    st.plotly_chart(_fig_el, width='stretch')
                     chart_download_btn(_fig_el, key=f"app_el_{element}_chart", filename=f"chart_{element}")
 
         # ── 평년 분석 ──
@@ -884,7 +884,7 @@ with tab_general:
                 # 월별 평년표
                 st.markdown("### 📋 월별 평년값")
                 pivot = climate_df.pivot_table(values=cl_element, index="month", columns="station_name")
-                st.dataframe(pivot.style.format("{:.2f}"), use_container_width=True, height=460)
+                st.dataframe(pivot.style.format("{:.2f}"), width='stretch', height=460)
 
                 csv_cl = pivot.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
                 st.download_button("⬇️ 평년 CSV", csv_cl, "climate_normals.csv", "text/csv", key="cl_csv")
@@ -894,7 +894,7 @@ with tab_general:
                 fig_cl = px.line(climate_df, x="month", y=cl_element, color="station_name",
                                  markers=True, labels={"month": "월"})
                 fig_cl.update_layout(height=380)
-                st.plotly_chart(fig_cl, use_container_width=True)
+                st.plotly_chart(fig_cl, width='stretch')
                 chart_download_btn(fig_cl, key="app_climate_normal_chart", filename="climate_normals_chart")
 
                 # 편차
@@ -904,7 +904,7 @@ with tab_general:
                     fig_an = px.line(anomaly_df, x="date", y="anomaly", color="station_name",
                                      labels={"date": "날짜", "anomaly": "편차"})
                     fig_an.update_layout(height=380)
-                    st.plotly_chart(fig_an, use_container_width=True)
+                    st.plotly_chart(fig_an, width='stretch')
                     chart_download_btn(fig_an, key="app_anomaly_chart", filename="climate_anomaly")
 
         # ── 월평균 분석 ──
@@ -942,7 +942,7 @@ with tab_general:
                 )
                 pivot_m.index.name = "월"
                 pivot_m["평균"] = pivot_m.mean(axis=1).round(2)
-                st.dataframe(pivot_m.style.format("{:.2f}"), use_container_width=True, height=460)
+                st.dataframe(pivot_m.style.format("{:.2f}"), width='stretch', height=460)
 
                 csv_m = pivot_m.to_csv(encoding="utf-8-sig").encode("utf-8-sig")
                 st.download_button("⬇️ 월평균 CSV", csv_m, f"monthly_{m_element}.csv", "text/csv", key="gen_t3_csv")
@@ -955,7 +955,7 @@ with tab_general:
                     markers=True,
                 )
                 fig_m.update_layout(height=400, xaxis=dict(tickmode="linear", dtick=1))
-                st.plotly_chart(fig_m, use_container_width=True)
+                st.plotly_chart(fig_m, width='stretch')
                 chart_download_btn(fig_m, key="app_monthly_trend_chart", filename="monthly_trend_chart")
 
         # ── 연평균 분석 ──
@@ -1014,7 +1014,7 @@ with tab_general:
                             )
                         fig_y.update_layout(height=max(350, 320 * len(y_elem_names)))
                         fig_y.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-                        st.plotly_chart(fig_y, use_container_width=True)
+                        st.plotly_chart(fig_y, width='stretch')
                         chart_download_btn(fig_y, key="app_annual_trend_chart", filename="annual_trend_chart")
 
                         st.markdown("### 📋 연별 통계표")
@@ -1035,7 +1035,7 @@ with tab_general:
                             tbl.index.name = "연도"
                             tbl["평균"] = tbl.mean(axis=1).round(2)
                             st.markdown(f"**{y_elem_name}**")
-                            st.dataframe(tbl.style.format("{:.2f}"), use_container_width=True)
+                            st.dataframe(tbl.style.format("{:.2f}"), width='stretch')
 
                         csv_y = annual_all.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
                         st.download_button("⬇️ 연평균 CSV", csv_y, "annual_stats.csv", "text/csv", key="gen_t4_csv")

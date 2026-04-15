@@ -66,7 +66,7 @@ def _tab_yearly_stats(df: pd.DataFrame) -> None:
         return
 
     result_df = pd.DataFrame(rows)
-    st.dataframe(result_df, use_container_width=True)
+    st.dataframe(result_df, width='stretch')
     st.download_button(
         label="CSV 다운로드",
         data=_csv_bytes(result_df),
@@ -141,7 +141,7 @@ def _tab_extreme_days(df: pd.DataFrame) -> None:
     )
     fig.update_xaxes(title="연도")
     fig.update_yaxes(title="일수 (일)")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="temp_extreme_days_chart", filename="extreme_temperature_days")
 
 
@@ -179,7 +179,7 @@ def _tab_monthly_boxplot(df: pd.DataFrame) -> None:
         labels={"month": "월", y_col: selected_label, "station_name": "관측소"},
     )
     fig.update_xaxes(tickvals=list(range(1, 13)), title="월")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="temp_monthly_box_chart", filename="monthly_temperature_boxplot")
 
 
@@ -239,7 +239,7 @@ def _tab_long_term_trend(df: pd.DataFrame) -> None:
         height=400,
         legend={"orientation": "h", "yanchor": "bottom", "y": -0.3},
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="temp_annual_trend_chart", filename="annual_temperature_trend")
 
 
@@ -284,7 +284,7 @@ def _tab_year_month_heatmap(df: pd.DataFrame) -> None:
         height=400,
     )
     fig.update_xaxes(side="bottom")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     chart_download_btn(fig, key="temp_heatmap_chart", filename="temperature_heatmap")
 
 
