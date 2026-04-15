@@ -623,17 +623,15 @@ def _render_climate_reference(df: pd.DataFrame) -> None:
 
 
 def render(df: pd.DataFrame) -> None:
-    col_title, col_btn = st.columns([6, 1])
-    with col_title:
-        st.header("기후변화 분석")
-    with col_btn:
-        st.markdown("<div style='padding-top:18px'>", unsafe_allow_html=True)
-        st.link_button(
-            "🗺️ 기후변화 상황지도",
-            "https://climate.go.kr/atlas/dsh/ccf",
-            use_container_width=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(
+        '<h2 style="display:inline;vertical-align:middle">기후변화 분석</h2>'
+        '&nbsp;&nbsp;<a href="https://climate.go.kr/atlas/dsh/ccf" target="_blank"'
+        ' style="display:inline-block;vertical-align:middle;padding:5px 14px;'
+        'background:#1a5276;color:white;border-radius:8px;font-size:0.88rem;'
+        'text-decoration:none;font-weight:600">🗺️ 기후변화 상황지도</a>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
 
     if df is None or df.empty:
         st.warning("표시할 데이터가 없습니다.")
