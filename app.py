@@ -328,7 +328,7 @@ st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/r
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 (tab_general, tab_temp, tab_precip, tab_wind,
- tab_solar, tab_agri, tab_climate, tab_download, tab_help) = st.tabs([
+ tab_solar, tab_agri, tab_climate, tab_ccmap, tab_download, tab_help) = st.tabs([
     "📊 종합 분석",
     "🌡️ 기온 분석",
     "🌧️ 강수량 분석",
@@ -336,6 +336,7 @@ st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/r
     "☀️ 태양광 분석",
     "🌱 농업기상 분석",
     "📈 기후변화 분석",
+    "🗺️ 기후변화 상황지도",
     "⬇️ 보고서 다운로드",
     "ℹ️ 사용 방법",
 ])
@@ -416,7 +417,96 @@ def calculate_anomaly(df, climate_df, element):
 
 with tab_general:
     if filtered_df is None:
-        st.info("먼저 데이터를 업로드하세요.")
+        st.markdown("""
+<style>
+.hero-wrap {
+    width: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #0a2342 0%, #1a4a7a 40%, #2d7dd2 70%, #4ab3f4 100%);
+    padding: 60px 48px 50px 48px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    position: relative;
+}
+.hero-title {
+    font-size: 2.6rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 12px 0;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    letter-spacing: -0.5px;
+}
+.hero-sub {
+    font-size: 1.15rem;
+    color: #cce8ff;
+    margin: 0 0 36px 0;
+    line-height: 1.7;
+}
+.hero-icons {
+    font-size: 2.2rem;
+    letter-spacing: 10px;
+    margin-bottom: 32px;
+    display: block;
+}
+.hero-steps {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+.hero-step {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 12px;
+    padding: 16px 22px;
+    color: #ffffff;
+    font-size: 0.95rem;
+    flex: 1;
+    min-width: 160px;
+    backdrop-filter: blur(4px);
+}
+.hero-step-num {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #7dd3fc;
+    display: block;
+    margin-bottom: 4px;
+}
+.hero-deco {
+    position: absolute;
+    right: 40px;
+    top: 30px;
+    font-size: 7rem;
+    opacity: 0.15;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+}
+</style>
+<div class="hero-wrap">
+    <div class="hero-deco">🌦️</div>
+    <span class="hero-icons">🌡️ 🌧️ ☀️ 💨 🌱 📈</span>
+    <div class="hero-title">기상자료 분석 시스템</div>
+    <div class="hero-sub">
+        기상청 ASOS 관측자료를 업로드하면 기온·강수·바람·일사·농업기상·기후변화<br>
+        등 다양한 분석 결과와 보고서를 자동으로 생성합니다.
+    </div>
+    <div class="hero-steps">
+        <div class="hero-step">
+            <span class="hero-step-num">① 업로드</span>
+            왼쪽 사이드바에서<br>CSV / XLSX 파일 선택
+        </div>
+        <div class="hero-step">
+            <span class="hero-step-num">② 분석</span>
+            상단 탭에서<br>원하는 분석 항목 선택
+        </div>
+        <div class="hero-step">
+            <span class="hero-step-num">③ 다운로드</span>
+            Excel·DOCX 보고서<br>또는 차트 XLSX 저장
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
     else:
         gen_t1, gen_t2, gen_t3, gen_t4 = st.tabs(["📊 대화형 차트", "📆 평년 분석", "📅 월평균 분석", "📅 연평균 분석"])
 
@@ -706,7 +796,24 @@ with tab_climate:
         analysis_climate.render(filtered_df)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB7 — 보고서 다운로드
+# TAB8 — 기후변화 상황지도
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+with tab_ccmap:
+    st.subheader("🗺️ 기후변화 상황지도")
+    st.caption("출처: 기상청 기후변화 상황지도 (climate.go.kr)")
+    st.link_button(
+        "🔗 새 창에서 열기",
+        "https://climate.go.kr/atlas/dsh/ccf",
+    )
+    st.components.v1.iframe(
+        "https://climate.go.kr/atlas/dsh/ccf",
+        height=780,
+        scrolling=True,
+    )
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TAB9 — 보고서 다운로드
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 with tab_download:
