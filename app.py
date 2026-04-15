@@ -337,7 +337,7 @@ st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/r
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 (tab_general, tab_temp, tab_precip, tab_wind,
- tab_solar, tab_agri, tab_climate, tab_download, tab_help) = st.tabs([
+ tab_solar, tab_agri, tab_climate, tab_globe, tab_download, tab_help) = st.tabs([
     "📊 종합 분석",
     "🌡️ 기온 분석",
     "🌧️ 강수량 분석",
@@ -345,6 +345,7 @@ st.sidebar.link_button("💨 에어코리아", "https://www.airkorea.or.kr/web/r
     "☀️ 태양광 분석",
     "🌱 농업기상 분석",
     "📈 기후변화 분석",
+    "🌍 Now, Global Weather",
     "⬇️ 보고서 다운로드",
     "ℹ️ 사용 방법",
 ])
@@ -1077,7 +1078,18 @@ with tab_climate:
         analysis_climate.render(filtered_df)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB8 — 보고서 다운로드
+# TAB8 — Now, Global Weather
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+with tab_globe:
+    st.components.v1.iframe(
+        "https://earth.nullschool.net/ko/",
+        height=800,
+        scrolling=False,
+    )
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TAB9 — 보고서 다운로드
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 with tab_download:
