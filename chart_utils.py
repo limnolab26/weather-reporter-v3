@@ -251,6 +251,9 @@ def _build_xlsx(fig, filename: str) -> Tuple[Optional[bytes], Optional[str]]:
 def chart_download_btn(fig, key: str, filename: str = "chart_data") -> None:
     """Plotly figure 데이터를 차트 이미지가 포함된 XLSX로 다운로드하는 버튼을 표시합니다.
 
+    성능 최적화: XLSX(matplotlib PNG 포함)는 사용자가 버튼을 클릭할 때만 생성합니다.
+    생성된 결과는 session_state에 캐시되어 이후 렌더링에서 재사용됩니다.
+
     - 데이터 시트: trace 데이터 (모든 차트 타입 지원)
     - 차트 시트: matplotlib으로 재렌더링한 PNG 이미지
     - 완전 실패 시 CSV로 폴백
@@ -262,29 +265,38 @@ def chart_download_btn(fig, key: str, filename: str = "chart_data") -> None:
     """
     import streamlit as st
 
-    xlsx_bytes, chart_error = _build_xlsx(fig, filename)
+    cache_key = f"__xlsx_cache__{key}"
 
-    if xlsx_bytes is not None:
-        st.download_button(
-            "⬇️ 차트 XLSX 다운로드",
-            xlsx_bytes,
-            f"{filename}.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key=key,
-        )
-        if chart_error:
-            st.caption(f"⚠️ 차트 이미지 생성 실패 (데이터 시트만 포함): {chart_error}")
-    else:
-        # 폴백: CSV
-        df = fig_to_df(fig)
-        if df is not None and not df.empty:
-            csv = df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+    # ── 이미 생성된 경우 → 다운로드 버튼 바로 표시 ──────────────
+    if cache_key in st.session_state:
+        xlsx_bytes, chart_error = st.session_state[cache_key]
+        if xlsx_bytes is not None:
             st.download_button(
-                "⬇️ 차트 데이터 CSV",
-                csv,
-                f"{filename}.csv",
-                "text/csv",
+                "⬇️ 차트 XLSX 다운로드",
+                xlsx_bytes,
+                f"{filename}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=key,
             )
+        else:
+            # 폴백: CSV
+            df = fig_to_df(fig)
+            if df is not None and not df.empty:
+                csv = df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+                st.download_button(
+                    "⬇️ 차트 데이터 CSV",
+                    csv,
+                    f"{filename}.csv",
+                    "text/csv",
+                    key=key,
+                )
         if chart_error:
-            st.caption(f"⚠️ XLSX 생성 실패: {chart_error}")
+            st.caption(f"⚠️ 차트 이미지 생성 실패 (데이터 시트만 포함): {chart_error}")
+        return
+
+    # ── 미생성 상태 → 클릭 시 생성 트리거 ────────────────────────
+    if st.button("⬇️ 차트 XLSX 다운로드", key=f"{key}__prepare"):
+        with st.spinner("XLSX 생성 중..."):
+            xlsx_bytes, chart_error = _build_xlsx(fig, filename)
+        st.session_state[cache_key] = (xlsx_bytes, chart_error)
+        st.rerun()

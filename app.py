@@ -292,6 +292,10 @@ if uploaded_files:
     if _new_file_key != st.session_state._portal_file_key:
         st.session_state._portal_file_key = _new_file_key
         st.session_state._portal_shown = False
+        # 새 데이터 업로드 시 XLSX 캐시 초기화 (chart_utils 지연 생성 캐시)
+        for _k in list(st.session_state.keys()):
+            if str(_k).startswith("__xlsx_cache__"):
+                del st.session_state[_k]
     df = load_multiple_files(uploaded_files)
     if df is not None:
         st.session_state.df = df
