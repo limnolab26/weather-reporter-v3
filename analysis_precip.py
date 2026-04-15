@@ -948,7 +948,7 @@ def _tab_summer_concentration(df: pd.DataFrame) -> None:
         fig_sc.update_layout(height=340, showlegend=(len(selected_periods) == 1))
         with cols[ci % n_cols]:
             st.plotly_chart(fig_sc, use_container_width=True)
-            chart_download_btn(fig_sc, key="precip_scatter_chart", filename="precipitation_scatter")
+            chart_download_btn(fig_sc, key=f"precip_scatter_chart_{ci}", filename=f"precipitation_scatter_{ci}")
 
     csv = show_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", csv, "여름강수집중도.csv", "text/csv", key="summer_conc_csv")
