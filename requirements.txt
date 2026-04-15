@@ -70,4 +70,4 @@ python-docx>=1.1.2
 # Plotly → PNG (chart image export)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-kaleido>=0.2.1
+kaleido==0.1.0.post1
