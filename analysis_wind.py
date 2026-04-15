@@ -7,6 +7,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from chart_utils import chart_download_btn
 
 try:
     from scipy import stats as scipy_stats
@@ -152,6 +153,7 @@ def _tab_wind_trend(df: pd.DataFrame) -> None:
         legend={"orientation": "h", "y": -0.25},
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="wind_speed_trend_chart", filename="wind_speed_trend")
 
     # ── 풍력에너지 밀도 섹션 ──────────────────────────────────────
     st.markdown("---")
@@ -233,6 +235,7 @@ def _tab_wind_trend(df: pd.DataFrame) -> None:
                 height=CHART_HEIGHT,
             )
             st.plotly_chart(fig_heat, use_container_width=True)
+            chart_download_btn(fig_heat, key="wind_wpd_heat_chart", filename="wind_power_density_heatmap")
 
     # 3) 풍력에너지 밀도 통계 요약 테이블
     summary_rows = []
@@ -326,6 +329,7 @@ def _tab_wind_rose(df: pd.DataFrame) -> None:
         height=CHART_HEIGHT,
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="wind_rose_chart", filename="wind_direction_rose")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -420,6 +424,7 @@ def _tab_weibull(df: pd.DataFrame) -> None:
         legend={"orientation": "h", "y": -0.2},
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="wind_hist_chart", filename="wind_speed_distribution")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -491,6 +496,7 @@ def _tab_wind_class(df: pd.DataFrame) -> None:
         legend={"orientation": "h", "y": -0.2},
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="wind_class_chart", filename="wind_speed_classes")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -565,6 +571,7 @@ def _tab_pressure(df: pd.DataFrame) -> None:
         legend={"orientation": "h", "y": -0.25},
     )
     st.plotly_chart(fig_monthly, use_container_width=True)
+    chart_download_btn(fig_monthly, key="wind_pressure_monthly_chart", filename="monthly_pressure")
 
     # 연간 기압 추이 + 회귀선
     pressure_col = "pressure_sea" if has_sea else "pressure_local"

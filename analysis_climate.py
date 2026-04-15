@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from scipy import stats
+from chart_utils import chart_download_btn
 
 # ── 통계 검정 상수 ────────────────────────────────────────────────
 _MK_LARGE_N_THRESHOLD = 100  # Mann-Kendall n>100이면 sampling 경고
@@ -188,6 +189,7 @@ def _render_temp_trend(df: pd.DataFrame) -> None:
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="climate_annual_temp_chart", filename="annual_temperature_trend")
 
     if slope_records:
         st.subheader("추세 요약")
@@ -267,6 +269,7 @@ def _render_precip_trend(df: pd.DataFrame) -> None:
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="climate_annual_precip_chart", filename="annual_precipitation_trend")
 
     if slope_records:
         st.subheader("추세 요약")

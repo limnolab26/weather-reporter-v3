@@ -8,6 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from scipy import stats
 import io
+from chart_utils import chart_download_btn
 
 
 # ── 내부 헬퍼 ──────────────────────────────────────────────────────────────
@@ -141,6 +142,7 @@ def _tab_extreme_days(df: pd.DataFrame) -> None:
     fig.update_xaxes(title="연도")
     fig.update_yaxes(title="일수 (일)")
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="temp_extreme_days_chart", filename="extreme_temperature_days")
 
 
 # ── Sub-tab 3: 월별 기온 분포 ────────────────────────────────────────────────
@@ -178,6 +180,7 @@ def _tab_monthly_boxplot(df: pd.DataFrame) -> None:
     )
     fig.update_xaxes(tickvals=list(range(1, 13)), title="월")
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="temp_monthly_box_chart", filename="monthly_temperature_boxplot")
 
 
 # ── Sub-tab 4: 장기 추세 ─────────────────────────────────────────────────────
@@ -237,6 +240,7 @@ def _tab_long_term_trend(df: pd.DataFrame) -> None:
         legend={"orientation": "h", "yanchor": "bottom", "y": -0.3},
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="temp_annual_trend_chart", filename="annual_temperature_trend")
 
 
 # ── Sub-tab 5: 연도×월 히트맵 ──────────────────────────────────────────────
@@ -281,6 +285,7 @@ def _tab_year_month_heatmap(df: pd.DataFrame) -> None:
     )
     fig.update_xaxes(side="bottom")
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="temp_heatmap_chart", filename="temperature_heatmap")
 
 
 # ── 공개 render 함수 ─────────────────────────────────────────────────────────

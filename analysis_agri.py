@@ -7,6 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
+from chart_utils import chart_download_btn
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 상수
@@ -387,6 +388,7 @@ def _tab_et0(df: pd.DataFrame) -> None:
                 title=f"{stn} 연별 ET₀ — 방법 비교"
             )
         st.plotly_chart(fig, use_container_width=True)
+        chart_download_btn(fig, key="agri_et0_cmp_chart", filename="et0_comparison")
     else:
         # 단일 방법 표시
         if freq == "월별":
@@ -409,6 +411,7 @@ def _tab_et0(df: pd.DataFrame) -> None:
             )
         fig.update_layout(height=380)
         st.plotly_chart(fig, use_container_width=True)
+        chart_download_btn(fig, key="agri_et0_single_chart", filename="et0_single")
 
     if method == METHOD_HS or compare_mode:
         st.caption(
@@ -439,6 +442,7 @@ def _tab_et0(df: pd.DataFrame) -> None:
         ))
         fig2.update_layout(height=350, yaxis_title="증발산량 (mm/월)")
         st.plotly_chart(fig2, use_container_width=True)
+        chart_download_btn(fig2, key="agri_et0_evap_chart", filename="et0_evaporation")
 
 
 def _tab_gdd(df: pd.DataFrame) -> None:
@@ -519,6 +523,7 @@ def _tab_gdd(df: pd.DataFrame) -> None:
             yaxis_title="누적 적산온도 (°C·day)",
         )
         st.plotly_chart(fig2, use_container_width=True)
+        chart_download_btn(fig2, key="agri_gdd_cum_chart", filename="gdd_cumulative")
 
     # ── 무상기간 (Frost-Free Period) 분석 ──
     with st.expander("🌡️ 무상기간 (Frost-Free Period) 분석", expanded=False):
@@ -631,6 +636,7 @@ def _tab_soil_water(df: pd.DataFrame) -> None:
     fig.update_yaxes(title_text="물수지 P-ET₀ (mm)", secondary_y=True)
     fig.update_layout(height=400, barmode="overlay")
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="agri_swb_chart", filename="soil_water_balance")
 
     st.caption("※ 단순 수지 모델 (토양 저장 미고려). 음수=토양수분 부족, 양수=잉여.")
 
@@ -699,6 +705,7 @@ def _tab_soil_temp(df: pd.DataFrame) -> None:
         legend_title="깊이"
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="agri_soil_temp_chart", filename="soil_temperature")
 
     # 연중 깊이별 분포 (특정 연도)
     st.markdown("#### 연중 지중온도 깊이별 프로파일 (월평균)")
@@ -753,6 +760,7 @@ def _tab_par(df: pd.DataFrame) -> None:
     fig.update_yaxes(title_text="일사량 (MJ/m²/월)", secondary_y=True)
     fig.update_layout(height=400)
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="agri_par_chart", filename="par_values")
 
     # 일차생산량 개략 추정
     st.markdown("#### 개략 일차생산량 (GPP) 추정")
@@ -783,6 +791,7 @@ def _tab_par(df: pd.DataFrame) -> None:
     )
     fig2.update_layout(height=350)
     st.plotly_chart(fig2, use_container_width=True)
+    chart_download_btn(fig2, key="agri_npp_chart", filename="npp_comparison")
 
     st.caption(
         "※ GPP = PAR × fAPAR × LUE 단순 LUE 모델 추정값. "

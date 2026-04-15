@@ -7,6 +7,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import io
+from chart_utils import chart_download_btn
 from scipy import stats
 
 
@@ -266,6 +267,7 @@ def _tab_annual_precip(df: pd.DataFrame) -> None:
         annotation_position="top left",
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="precip_annual_bar_chart", filename="annual_precipitation")
 
 
 # ── Sub-tab 2: 강우강도 분석 ────────────────────────────────────────────────
@@ -482,6 +484,7 @@ def _tab_monthly_heatmap(df: pd.DataFrame) -> None:
     )
     fig.update_xaxes(side="bottom")
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="precip_monthly_heat_chart", filename="monthly_precipitation_heatmap")
 
 
 # ── Sub-tab 5: 최대일강수 추이 ──────────────────────────────────────────────
@@ -521,6 +524,7 @@ def _tab_max_daily_precip(df: pd.DataFrame) -> None:
         annotation_position="top left",
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="precip_annual_max_chart", filename="annual_max_precipitation")
 
 
 # ── 공개 render 함수 ─────────────────────────────────────────────────────────
@@ -731,6 +735,7 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
     if not ratio.empty:
         fig_mv = _plot_mv_curves(ratio, stn)
         st.plotly_chart(fig_mv, use_container_width=False)
+        chart_download_btn(fig_mv, key="precip_spi_heat_chart", filename="spi_heatmap")
 
         # MV 커브 비율 테이블 (expander)
         with st.expander("MV 커브 수치 데이터 (연도별 월별 누적 비율)"):
@@ -792,6 +797,7 @@ def _tab_cumulative(df: pd.DataFrame) -> None:
     )
     fig.update_layout(height=max(350, len(hm_data) * 15 + 120))
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="precip_trend_chart", filename="precipitation_trend")
 
 
 def _tab_summer_concentration(df: pd.DataFrame) -> None:

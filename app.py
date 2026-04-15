@@ -24,6 +24,7 @@ import analysis_solar
 import analysis_wind
 import analysis_agri
 import analysis_climate
+from chart_utils import chart_download_btn
 
 # Plotly 전역 글씨 크기 설정 (모든 그래프에 적용)
 _base = pio.templates["plotly"]
@@ -463,7 +464,9 @@ with tab_general:
                 combo_df["date"] = pd.to_datetime(
                     combo_df["year"].astype(str) + "-" + combo_df["month"].astype(str) + "-01"
                 )
-                st.plotly_chart(create_temp_precip_combo(combo_df), use_container_width=True)
+                _fig_combo = create_temp_precip_combo(combo_df)
+                st.plotly_chart(_fig_combo, use_container_width=True)
+                chart_download_btn(_fig_combo, key="app_combo_chart", filename="temp_precip_combo")
 
             elif chart_type == "비교(다중요소)":
                 if sel_elements:
@@ -476,17 +479,18 @@ with tab_general:
                                 el_types[available_elements[name]] = t
                     available_sel = [e for e in sel_elements if e in chart_df.columns]
                     if available_sel:
-                        st.plotly_chart(
-                            create_comparison_chart(chart_df, available_sel, el_types, freq),
-                            use_container_width=True
-                        )
+                        _fig_cmp = create_comparison_chart(chart_df, available_sel, el_types, freq)
+                        st.plotly_chart(_fig_cmp, use_container_width=True)
+                        chart_download_btn(_fig_cmp, key="app_compare_chart", filename="element_comparison")
             else:
                 for element in sel_elements:
                     if element not in chart_df.columns:
                         st.warning(f"'{ELEMENT_LABELS.get(element, element)}' 데이터가 없습니다.")
                         continue
                     el_df = prepare_chart_data(chart_df, element, freq)
-                    st.plotly_chart(create_plotly_chart(el_df, element, chart_type), use_container_width=True)
+                    _fig_el = create_plotly_chart(el_df, element, chart_type)
+                    st.plotly_chart(_fig_el, use_container_width=True)
+                    chart_download_btn(_fig_el, key=f"app_el_{element}_chart", filename=f"chart_{element}")
 
         # ── 평년 분석 ──
         with gen_t2:
@@ -516,6 +520,7 @@ with tab_general:
                                  markers=True, labels={"month": "월"})
                 fig_cl.update_layout(height=380)
                 st.plotly_chart(fig_cl, use_container_width=True)
+                chart_download_btn(fig_cl, key="app_climate_normal_chart", filename="climate_normals_chart")
 
                 # 편차
                 st.markdown("### 📉 평년 대비 편차")
@@ -525,6 +530,7 @@ with tab_general:
                                      labels={"date": "날짜", "anomaly": "편차"})
                     fig_an.update_layout(height=380)
                     st.plotly_chart(fig_an, use_container_width=True)
+                    chart_download_btn(fig_an, key="app_anomaly_chart", filename="climate_anomaly")
 
         # ── 월평균 분석 ──
         with gen_t3:
@@ -575,6 +581,7 @@ with tab_general:
                 )
                 fig_m.update_layout(height=400, xaxis=dict(tickmode="linear", dtick=1))
                 st.plotly_chart(fig_m, use_container_width=True)
+                chart_download_btn(fig_m, key="app_monthly_trend_chart", filename="monthly_trend_chart")
 
         # ── 연평균 분석 ──
         with gen_t4:
@@ -633,6 +640,7 @@ with tab_general:
                         fig_y.update_layout(height=max(350, 320 * len(y_elem_names)))
                         fig_y.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
                         st.plotly_chart(fig_y, use_container_width=True)
+                        chart_download_btn(fig_y, key="app_annual_trend_chart", filename="annual_trend_chart")
 
                         st.markdown("### 📋 연별 통계표")
                         for y_elem_name in y_elem_names:

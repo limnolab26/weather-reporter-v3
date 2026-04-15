@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from chart_utils import chart_download_btn
 
 SEASON_ORDER = ["봄", "여름", "가을", "겨울"]
 CHART_HEIGHT = 400
@@ -105,6 +106,7 @@ def _tab_monthly_solar(df: pd.DataFrame) -> None:
     fig.update_yaxes(title_text="일조시간 (hr)", secondary_y=True)
 
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="solar_monthly_chart", filename="monthly_solar_sunshine")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -187,6 +189,7 @@ def _tab_annual_trend(df: pd.DataFrame) -> None:
     fig.update_yaxes(title_text="일조시간 합계 (hr)", secondary_y=True)
 
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="solar_annual_chart", filename="annual_solar_sunshine")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -225,6 +228,7 @@ def _tab_seasonal(df: pd.DataFrame) -> None:
     )
     fig.update_layout(legend={"orientation": "h", "y": -0.2})
     st.plotly_chart(fig, use_container_width=True)
+    chart_download_btn(fig, key="solar_seasonal_chart", filename="seasonal_solar_boxplot")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -268,6 +272,7 @@ def _tab_cloud(df: pd.DataFrame) -> None:
     )
     fig_line.update_layout(legend={"orientation": "h", "y": -0.2})
     st.plotly_chart(fig_line, use_container_width=True)
+    chart_download_btn(fig_line, key="solar_cloud_trend_chart", filename="annual_cloud_cover")
 
     # 운량 등급 분류 (10분위 기준)
     def classify_cloud(val: float) -> str:
@@ -318,6 +323,7 @@ def _tab_cloud(df: pd.DataFrame) -> None:
         legend={"orientation": "h", "y": -0.2},
     )
     st.plotly_chart(fig_bar, use_container_width=True)
+    chart_download_btn(fig_bar, key="solar_cloud_class_chart", filename="cloud_classification")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -369,6 +375,7 @@ def _tab_sunshine_ratio(df: pd.DataFrame) -> None:
         legend={"orientation": "h", "y": -0.2},
     )
     st.plotly_chart(fig_bar, use_container_width=True)
+    chart_download_btn(fig_bar, key="solar_monthly_ratio_chart", filename="monthly_sunshine_ratio")
 
     # 연간 일조율 추이
     annual_ratio = ratio_df.groupby(["year", "station_name"], as_index=False).agg(
@@ -387,6 +394,7 @@ def _tab_sunshine_ratio(df: pd.DataFrame) -> None:
     )
     fig_line.update_layout(legend={"orientation": "h", "y": -0.2})
     st.plotly_chart(fig_line, use_container_width=True)
+    chart_download_btn(fig_line, key="solar_annual_ratio_chart", filename="annual_sunshine_ratio")
 
 
 # ──────────────────────────────────────────────────────────────
