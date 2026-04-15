@@ -428,73 +428,125 @@ def calculate_anomaly(df, climate_df, element):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def _show_portal_animation() -> None:
-    """기상의 세계로 빨려드는 차원이동 애니메이션 (3초 후 자동 소멸)"""
+    """기상의 세계로 빨려드는 차원이동 애니메이션.
+
+    JavaScript 없이 순수 CSS animation-fill-mode:forwards 로 4초 후 자동 소멸.
+    pointer-events:none 으로 애니메이션 중에도 UI 조작 가능.
+    """
     st.markdown("""
 <style>
+/* ── 전체 오버레이: 4s 뒤 영구 투명 ── */
 #wx-portal-overlay {
     position:fixed; top:0; left:0; width:100vw; height:100vh;
-    background:radial-gradient(ellipse at 50% 50%, #0a1628 0%, #000d1f 55%, #000000 100%);
+    background:radial-gradient(ellipse at 50% 50%,#0a1628 0%,#000d1f 55%,#000000 100%);
     z-index:99999;
+    pointer-events:none;           /* UI 클릭 항상 통과 */
     display:flex; flex-direction:column;
     align-items:center; justify-content:center;
-    transition:opacity 0.7s ease;
+    animation:wx-overlay-life 4.2s ease-in-out forwards;
 }
-#wx-portal-overlay.fade-out { opacity:0; pointer-events:none; }
-.wx-stars { position:absolute; inset:0; overflow:hidden; }
-.wx-star {
-    position:absolute; border-radius:50%; background:white;
-    animation:twinkle 2s infinite alternate;
+@keyframes wx-overlay-life {
+    0%   { opacity:0; }
+    5%   { opacity:1; }
+    78%  { opacity:1; }
+    100% { opacity:0; }
 }
+
+/* ── 회전 링 ── */
 .wx-ring {
     width:170px; height:170px;
     border:3px solid transparent; border-radius:50%;
     border-top-color:#4ab3f4; border-right-color:#7dd3fc;
-    animation:spin 1.1s linear infinite;
+    animation:wx-spin 1.1s linear infinite;
     position:relative;
 }
 .wx-ring::after {
     content:''; position:absolute; inset:14px;
     border:2px solid transparent; border-radius:50%;
     border-bottom-color:#93c5fd; border-left-color:#bfdbfe;
-    animation:spin 0.75s linear infinite reverse;
+    animation:wx-spin 0.75s linear infinite reverse;
 }
 .wx-center {
-    position:absolute;
-    font-size:3.2rem;
-    animation:pulse-glow 1.5s ease-in-out infinite;
+    position:absolute; font-size:3.2rem;
+    animation:wx-pulse 1.5s ease-in-out infinite;
 }
+
+/* ── 워프 아이콘 ── */
 .wx-fly {
     position:fixed; top:50%; left:50%;
     font-size:1.9rem; opacity:0;
-    animation:fly-out 2.4s ease-out forwards;
+    animation:wx-fly-out 2.4s ease-out forwards;
 }
+
+/* ── 텍스트 ── */
 .wx-title {
     color:#7dd3fc; font-size:1.55rem; font-weight:800;
-    margin-top:30px; letter-spacing:3px;
-    animation:glow-text 1.5s ease-in-out infinite alternate;
+    margin-top:28px; letter-spacing:3px;
+    animation:wx-glow 1.5s ease-in-out infinite alternate;
 }
-.wx-subtitle {
-    color:#93c5fd; font-size:0.9rem; margin-top:10px;
-    opacity:0.65; letter-spacing:2px;
+.wx-sub {
+    color:#93c5fd; font-size:.88rem; margin-top:10px;
+    opacity:.65; letter-spacing:2px;
 }
-@keyframes spin      { to { transform:rotate(360deg); } }
-@keyframes twinkle   { from { opacity:.15; } to { opacity:.9; } }
-@keyframes pulse-glow{
-    0%,100%{ transform:scale(1);   filter:drop-shadow(0 0 8px #4ab3f4); }
-    50%    { transform:scale(1.18);filter:drop-shadow(0 0 22px #7dd3fc); }
+
+/* ── 별 ── */
+.wx-star {
+    position:absolute; border-radius:50%; background:white;
+    animation:wx-twinkle 2s infinite alternate;
 }
-@keyframes glow-text {
+
+@keyframes wx-spin    { to { transform:rotate(360deg); } }
+@keyframes wx-twinkle { from { opacity:.1; } to { opacity:.85; } }
+@keyframes wx-pulse   {
+    0%,100%{ transform:scale(1);    filter:drop-shadow(0 0 8px #4ab3f4); }
+    50%    { transform:scale(1.18); filter:drop-shadow(0 0 22px #7dd3fc); }
+}
+@keyframes wx-glow {
     from { text-shadow:0 0 10px #4ab3f4,0 0 24px #4ab3f4; }
     to   { text-shadow:0 0 22px #7dd3fc,0 0 44px #93c5fd; }
 }
-@keyframes fly-out {
+@keyframes wx-fly-out {
     0%  { opacity:0; transform:translate(-50%,-50%) scale(.4); }
     18% { opacity:1; transform:translate(-50%,-50%) scale(1.15); }
     100%{ opacity:0; transform:translate(var(--fx),var(--fy)) scale(.2); }
 }
+
+/* 별 위치 (JS 없이 CSS만으로 분산) */
+.wx-star:nth-child(1){left:5%;top:8%;width:2px;height:2px;animation-delay:.3s}
+.wx-star:nth-child(2){left:15%;top:22%;width:1px;height:1px;animation-delay:.8s}
+.wx-star:nth-child(3){left:28%;top:6%;width:3px;height:3px;animation-delay:.1s}
+.wx-star:nth-child(4){left:42%;top:18%;width:2px;height:2px;animation-delay:1.1s}
+.wx-star:nth-child(5){left:58%;top:5%;width:1px;height:1px;animation-delay:.5s}
+.wx-star:nth-child(6){left:72%;top:14%;width:2px;height:2px;animation-delay:.9s}
+.wx-star:nth-child(7){left:85%;top:9%;width:3px;height:3px;animation-delay:.2s}
+.wx-star:nth-child(8){left:93%;top:25%;width:1px;height:1px;animation-delay:1.4s}
+.wx-star:nth-child(9){left:8%;top:40%;width:2px;height:2px;animation-delay:.6s}
+.wx-star:nth-child(10){left:20%;top:55%;width:1px;height:1px;animation-delay:1.2s}
+.wx-star:nth-child(11){left:35%;top:70%;width:2px;height:2px;animation-delay:.4s}
+.wx-star:nth-child(12){left:50%;top:85%;width:3px;height:3px;animation-delay:.7s}
+.wx-star:nth-child(13){left:65%;top:75%;width:1px;height:1px;animation-delay:1.0s}
+.wx-star:nth-child(14){left:78%;top:60%;width:2px;height:2px;animation-delay:.15s}
+.wx-star:nth-child(15){left:90%;top:48%;width:1px;height:1px;animation-delay:1.3s}
+.wx-star:nth-child(16){left:12%;top:88%;width:2px;height:2px;animation-delay:.55s}
+.wx-star:nth-child(17){left:48%;top:95%;width:1px;height:1px;animation-delay:.85s}
+.wx-star:nth-child(18){left:82%;top:82%;width:3px;height:3px;animation-delay:.35s}
+.wx-star:nth-child(19){left:3%;top:65%;width:1px;height:1px;animation-delay:1.05s}
+.wx-star:nth-child(20){left:96%;top:72%;width:2px;height:2px;animation-delay:.65s}
 </style>
+
 <div id="wx-portal-overlay">
-  <div class="wx-stars" id="wx-stars-el"></div>
+  <!-- 별 20개 -->
+  <div style="position:absolute;inset:0;overflow:hidden">
+    <div class="wx-star"></div><div class="wx-star"></div><div class="wx-star"></div>
+    <div class="wx-star"></div><div class="wx-star"></div><div class="wx-star"></div>
+    <div class="wx-star"></div><div class="wx-star"></div><div class="wx-star"></div>
+    <div class="wx-star"></div><div class="wx-star"></div><div class="wx-star"></div>
+    <div class="wx-star"></div><div class="wx-star"></div><div class="wx-star"></div>
+    <div class="wx-star"></div><div class="wx-star"></div><div class="wx-star"></div>
+    <div class="wx-star"></div><div class="wx-star"></div>
+  </div>
+
+  <!-- 워프 아이콘 12개 -->
   <span class="wx-fly" style="--fx:-580px;--fy:-320px;animation-delay:.05s">🌡️</span>
   <span class="wx-fly" style="--fx: 580px;--fy:-320px;animation-delay:.25s">🌧️</span>
   <span class="wx-fly" style="--fx:-480px;--fy: 380px;animation-delay:.45s">☀️</span>
@@ -507,36 +559,16 @@ def _show_portal_animation() -> None:
   <span class="wx-fly" style="--fx: 380px;--fy:-400px;animation-delay:.20s">🌪️</span>
   <span class="wx-fly" style="--fx:-380px;--fy: 400px;animation-delay:.50s">🌈</span>
   <span class="wx-fly" style="--fx: 380px;--fy: 400px;animation-delay:.00s">⚡</span>
+
+  <!-- 중앙 링 + 아이콘 -->
   <div style="position:relative;display:flex;align-items:center;justify-content:center;">
     <div class="wx-ring"></div>
     <span class="wx-center">🌦️</span>
   </div>
+
   <div class="wx-title">기상의 세계로...</div>
-  <div class="wx-subtitle">데이터를 분석하고 있습니다</div>
+  <div class="wx-sub">데이터를 분석하고 있습니다</div>
 </div>
-<script>
-(function(){
-  var c=document.getElementById('wx-stars-el');
-  if(!c) return;
-  for(var i=0;i<90;i++){
-    var s=document.createElement('div');
-    s.className='wx-star';
-    s.style.left=Math.random()*100+'%';
-    s.style.top=Math.random()*100+'%';
-    var sz=(1+Math.random()*2.5)+'px';
-    s.style.width=sz; s.style.height=sz;
-    s.style.animationDelay=Math.random()*2+'s';
-    s.style.animationDuration=(1+Math.random()*2)+'s';
-    c.appendChild(s);
-  }
-  setTimeout(function(){
-    var el=document.getElementById('wx-portal-overlay');
-    if(el){ el.classList.add('fade-out');
-      setTimeout(function(){ if(el&&el.parentNode) el.parentNode.removeChild(el); },800);
-    }
-  },3000);
-})();
-</script>
 """, unsafe_allow_html=True)
 
 
