@@ -300,9 +300,13 @@ def _tab_phase_lag(df):
         for year, ydf in df.groupby("year"):
             if "soil_temp_surface" not in ydf.columns or d["col"] not in ydf.columns:
                 continue
-            ref_idx = ydf["soil_temp_surface"].idxmax()
-            tgt_idx = ydf[d["col"]].idxmax()
-            if pd.notna(ref_idx) and pd.notna(tgt_idx):
+            surf_series = ydf["soil_temp_surface"].dropna()
+            tgt_series  = ydf[d["col"]].dropna()
+            if surf_series.empty or tgt_series.empty:
+                continue
+            ref_idx = surf_series.idxmax()
+            tgt_idx = tgt_series.idxmax()
+            if pd.notna(ref_idx) and pd.notna(tgt_idx) and "date" in ydf.columns:
                 lag = (ydf.loc[tgt_idx, "date"] - ydf.loc[ref_idx, "date"]).days
                 lags.append(lag)
         if lags:
