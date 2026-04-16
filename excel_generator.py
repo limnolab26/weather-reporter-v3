@@ -210,6 +210,15 @@ class ExcelReportGenerator:
         if 'month' not in df2.columns and 'date' in df2.columns:
             df2['month'] = df2['date'].dt.month
 
+        # 지점별 날짜 오름차순 정렬 (다중 파일 통합 시 순서 보장)
+        sort_cols = []
+        if 'station_name' in df2.columns:
+            sort_cols.append('station_name')
+        if 'date' in df2.columns:
+            sort_cols.append('date')
+        if sort_cols:
+            df2 = df2.sort_values(sort_cols).reset_index(drop=True)
+
         self._years = sorted(df2['year'].dropna().unique().astype(int).tolist())
         self._n_rows = len(df2)
         self._has_stn = 'station_name' in df2.columns
